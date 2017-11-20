@@ -1,14 +1,19 @@
 import cv2
+import cPickle
 import logging
+import os
 import sys
 import yaml
 import numpy as np
+import time
+
 from bunch import bunchify
 
 # Our module imports
-import utils
+import steps
 
 from config.arguments import parser
+from tools import show_img
 
 
 logging.basicConfig(
@@ -21,9 +26,21 @@ logger = logging.getLogger(__name__)
 PATCH_SIZE = 7
 
 
-def show_img(img):
-    cv2.imshow("Image", img)
-    cv2.waitKey(0)
+def save(img_file, patches, pairs):
+    with open(img_file.split('.')[0] + '.patches', 'wb') as f:
+        cPickle.dump(patches, f)
+    with open(img_file.split('.')[0] + '.pairs', 'wb') as f:
+        cPickle.dump(pairs, f)
+
+
+def load(img_file):
+    if not os.path.exists(img_file.split('.')[0] + '.patches'):
+        return None, None
+    with open(img_file.split('.')[0] + '.patches', 'rb') as f:
+        patches = cPickle.load(f)
+    with open(img_file.split('.')[0] + '.pairs', 'rb') as f:
+        pairs = cPickle.load(f)
+    return patches, pairs
 
 
 def main():
@@ -33,12 +50,42 @@ def main():
 
     logger.info("Loading image %s ..." % args.input)
     img = cv2.imread(args.input, flags=cv2.IMREAD_COLOR)
-    scaled_imgs = utils.scale(img, [0.25, 0.5, 0.75, 1])
-    logger.info("Extracting patches ...")
-    mean_patches, patches, locations = utils.generate_patches(scaled_imgs, constants)
-    pairs = utils.generate_pairs(patches, constants)
-    pairs = utils.filter_pairs(patches, pairs, constants)
-    import pdb; pdb.set_trace()
+    # image scaled in 0-1 range
+    img = img / 255.0
+    # Scale array must be in decreasing order
+    scaled_imgs = steps.scale(img, [1, 0.75, 0.5, 0.375, 0.3, 0.25])
+
+    if not args.no_cache:
+        patches, pairs = load(args.input)
+    else:
+        patches, pairs = None, None
+    if patches is None and pairs is None:
+        logger.info("Extracting patches ...")
+        patches = steps.generate_patches(scaled_imgs, constants)
+
+        logger.info("Generating pairs of patches ...")
+        pairs = steps.generate_pairs(patches, constants)
+
+        logger.info("Saving patches and pairs ...")
+        save(args.input, patches, pairs)
+    else:
+        logger.info("Using saved patches and pairs ...")
+
+    logger.info("Filtering pairs of patches and estimating local airlight ...")
+    pairs = steps.filter_pairs(patches, pairs, constants)
+
+    sum1 = np.zeros((len(pairs), 3))
+    for i, pair in enumerate(pairs):
+        sum1[i] = pair.airlight
+    print np.mean(sum1, axis=0)
+
+    logger.info("Removing outliers ...")
+    pairs = steps.remove_outliers(pairs, constants)
+
+    logger.info("Estimating global airlight ...")
+    airlight = steps.estimate_airlight(pairs)
+
+    logger.info("Estimatied airlight is ...")
 
 if __name__ == '__main__':
     main()

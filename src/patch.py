@@ -1,0 +1,59 @@
+import numpy as np
+
+import tools
+
+
+class Patch(object):
+    def __init__(self, raw_patch, patch_size):
+        self.raw_patch = raw_patch
+        self.patch_size = patch_size
+        # Compute mean in each of the three channels individually
+        means = np.mean(np.reshape(raw_patch, [patch_size * patch_size, 3]), axis=0)
+        # Subtract mean color from all channels individually
+        self.air_free_patch = raw_patch - np.reshape(means, [1, 1, 3])
+        # All three channels concatenated before normalizing
+        self.mean_free_patch = np.reshape(self.air_free_patch, [-1])
+        self.std_dev = np.std(self.mean_free_patch)
+
+    def store(self, img, location):
+        # If the patch passes std_dev test, the following vector used in KNN
+        self.norm_patch = self.mean_free_patch / self.std_dev
+        # Used to refer to original location in future if needed
+        self.location = location
+        self.img = img
+
+
+class Pair(object):
+    def __init__(self, first, second):
+        self.first = first
+        self.second = second
+        # Estimate the airlights for this pair using least-squares
+        air_free1 = np.reshape(first.air_free_patch, [-1, 3])
+        air_free2 = np.reshape(second.air_free_patch, [-1, 3])
+        raw1 = np.reshape(first.raw_patch, [-1, 3])
+        raw2 = np.reshape(second.raw_patch, [-1, 3])
+        # Equation (11) in Bahat et al.
+        self.airlight = np.zeros(3)
+        for i in range(3):
+            airlight = np.dot(
+                np.transpose(air_free2[:, i] - air_free1[:, i]),
+                np.multiply(raw1[:, i], air_free2[:, i]) - np.multiply(raw2[:, i], air_free1[:, i])
+            )
+            self.airlight[i] = airlight / np.sum((air_free2[:, i] - air_free1[:, i]) ** 2)
+
+    def calculate_outlier(self):
+        raw1 = np.reshape(self.first.raw_patch, [-1, 3])
+        raw2 = np.reshape(self.second.raw_patch, [-1, 3])
+        airlight = np.reshape(self.airlight, [1, 3])
+        std1 = self.first.std_dev
+        std2 = self.second.std_dev
+        self.tlb1 = np.amax(1 - raw1 / airlight, axis=1)
+        self.tlb2 = np.amax(1 - raw2 / airlight, axis=1)
+
+        tlb1_max = np.max(self.tlb1)
+        tlb2_max = np.max(self.tlb2)
+        self.weight = ((tlb1_max - tlb2_max) * (tlb1_max / tlb2_max - 1)) ** 2
+
+        self.outlier_indicator = np.mean(
+            np.abs(self.tlb2 / self.tlb1 - std2 / std1)
+        )
