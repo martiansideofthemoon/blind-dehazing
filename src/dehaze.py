@@ -73,7 +73,7 @@ def main():
 
     logger.info("Filtering pairs of patches and estimating local airlight ...")
     pairs = steps.filter_pairs(patches, pairs, constants)
-
+    import pdb; pdb.set_trace()
     sum1 = np.zeros((len(pairs), 3))
     for i, pair in enumerate(pairs):
         sum1[i] = pair.airlight

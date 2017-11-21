@@ -86,6 +86,7 @@ def filter_pairs(patches, pairs, constants):
     patch_database = np.concatenate(patch_database)
 
     filtered_pairs = []
+    pair_list = {}
     for i in range(pairs.shape[0]):
         for j in range(pairs.shape[1]):
             # We've taken nearest K+1 neighbours, self-match is a problem here
@@ -96,7 +97,10 @@ def filter_pairs(patches, pairs, constants):
                 patch_database[i], patch_database[pairs[i, j]]
             )
             correlation = 1 - distance
-            if correlation >= pair_threshold:
+            if (correlation >= pair_threshold) and ("%d,%d" % (i, pairs[i, j]) not in pair_list):
+                # This is stored to remove symmetric duplicates
+                pair_list["%d,%d" % (i, pairs[i, j])] = 1
+                pair_list["%d,%d" % (pairs[i, j], i)] = 1
                 filtered_pairs.append(
                     Pair(patches2[i], patches2[pairs[i, j]])
                 )
