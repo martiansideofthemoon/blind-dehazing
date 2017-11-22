@@ -14,7 +14,9 @@ def scale(img, scales):
     """Returns an array of images sized according to `scales`"""
     outputs = []
     for sc in scales:
-        outputs.append(cv2.resize(img, None, fx=sc, fy=sc))
+        outputs.append(
+            cv2.resize(img, None, fx=sc, fy=sc, interpolation=cv2.INTER_CUBIC)
+        )
     return outputs
 
 
@@ -73,6 +75,22 @@ def generate_pairs(patches, constants):
     return np.concatenate(nearest)
 
 
+def remove_duplicates(pairs):
+    unique_pairs = []
+    pair_list = {}
+    for i in range(pairs.shape[0]):
+        for j in range(pairs.shape[1]):
+            # This is to remove self-matches
+            if i == pairs[i, j]:
+                continue
+            if ("%d,%d" % (i, pairs[i, j]) not in pair_list):
+                # This is stored to remove symmetric duplicates
+                pair_list["%d,%d" % (i, pairs[i, j])] = 1
+                pair_list["%d,%d" % (pairs[i, j], i)] = 1
+                unique_pairs.append([i, pairs[i, j]])
+    return unique_pairs
+
+
 def filter_pairs(patches, pairs, constants):
     pair_threshold = constants.PAIR_THRESHOLD
     # Convert the list of patch norms into numpy arrays
@@ -86,24 +104,17 @@ def filter_pairs(patches, pairs, constants):
     patch_database = np.concatenate(patch_database)
 
     filtered_pairs = []
-    pair_list = {}
-    for i in range(pairs.shape[0]):
-        for j in range(pairs.shape[1]):
-            # We've taken nearest K+1 neighbours, self-match is a problem here
-            if i == pairs[i, j]:
-                continue
-            # Thresholding pairs based on last line in 3.1
-            distance = spatial.distance.correlation(
-                patch_database[i], patch_database[pairs[i, j]]
+    for i, j in pairs:
+        # Thresholding pairs based on last line in 3.1
+        distance = spatial.distance.correlation(
+            patch_database[i], patch_database[j]
+        )
+        correlation = 1 - distance
+
+        if correlation >= pair_threshold:
+            filtered_pairs.append(
+                Pair(patches2[i], patches2[j])
             )
-            correlation = 1 - distance
-            if (correlation >= pair_threshold) and ("%d,%d" % (i, pairs[i, j]) not in pair_list):
-                # This is stored to remove symmetric duplicates
-                pair_list["%d,%d" % (i, pairs[i, j])] = 1
-                pair_list["%d,%d" % (pairs[i, j], i)] = 1
-                filtered_pairs.append(
-                    Pair(patches2[i], patches2[pairs[i, j]])
-                )
     return np.array(filtered_pairs)
 
 

@@ -1,5 +1,7 @@
 import numpy as np
 
+from scipy import spatial
+
 import tools
 
 
@@ -27,6 +29,10 @@ class Pair(object):
     def __init__(self, first, second):
         self.first = first
         self.second = second
+        distance = spatial.distance.correlation(
+            first.norm_patch, second.norm_patch
+        )
+        self.correlation = 1 - distance
         # Estimate the airlights for this pair using least-squares
         air_free1 = np.reshape(first.air_free_patch, [-1, 3])
         air_free2 = np.reshape(second.air_free_patch, [-1, 3])
@@ -57,3 +63,6 @@ class Pair(object):
         self.outlier_indicator = np.mean(
             np.abs(self.tlb2 / self.tlb1 - std2 / std1)
         )
+
+    def show(self):
+        tools.draw_pairs(self)

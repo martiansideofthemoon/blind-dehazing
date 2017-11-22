@@ -23,8 +23,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-PATCH_SIZE = 7
-
 
 def save(img_file, patches, pairs):
     with open(img_file.split('.')[0] + '.patches', 'wb') as f:
@@ -53,7 +51,8 @@ def main():
     # image scaled in 0-1 range
     img = img / 255.0
     # Scale array must be in decreasing order
-    scaled_imgs = steps.scale(img, [1, 0.75, 0.5, 0.375, 0.3, 0.25])
+    # scaled_imgs = steps.scale(img, [1, 0.75, 0.5, 0.375, 0.3, 0.25])
+    scaled_imgs = steps.scale(img, [1, 300.0 / 384, 200.0 / 384, 150.0 / 384, 120.0 / 384, 100.0 / 384])
 
     if not args.no_cache:
         patches, pairs = load(args.input)
@@ -66,6 +65,9 @@ def main():
         logger.info("Generating pairs of patches ...")
         pairs = steps.generate_pairs(patches, constants)
 
+        logger.info("Removing duplicates ...")
+        pairs = steps.remove_duplicates(pairs)
+
         logger.info("Saving patches and pairs ...")
         save(args.input, patches, pairs)
     else:
@@ -73,11 +75,12 @@ def main():
 
     logger.info("Filtering pairs of patches and estimating local airlight ...")
     pairs = steps.filter_pairs(patches, pairs, constants)
-    import pdb; pdb.set_trace()
+
     sum1 = np.zeros((len(pairs), 3))
     for i, pair in enumerate(pairs):
         sum1[i] = pair.airlight
     print np.mean(sum1, axis=0)
+    import pdb; pdb.set_trace()
 
     logger.info("Removing outliers ...")
     pairs = steps.remove_outliers(pairs, constants)
