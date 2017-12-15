@@ -2,6 +2,7 @@ import cv2
 import cPickle
 import logging
 import os
+import random
 import sys
 import yaml
 import numpy as np
@@ -13,7 +14,7 @@ from bunch import bunchify
 import steps
 
 from config.arguments import parser
-from tools import show_img
+import tools
 
 
 logging.basicConfig(
@@ -76,14 +77,27 @@ def main():
     logger.info("Filtering pairs of patches and estimating local airlight ...")
     pairs = steps.filter_pairs(patches, pairs, constants)
 
-    sum1 = np.zeros((len(pairs), 3))
-    for i, pair in enumerate(pairs):
-        sum1[i] = pair.airlight
-    print np.mean(sum1, axis=0)
-    import pdb; pdb.set_trace()
+    pairs2 = steps.remove_overlaps(pairs, constants)
+
+    # k = 547
+    # p1 = pairs2[k]
+    # stats = []
+
+    # for i, p2 in enumerate(pairs2):
+    #     if i == k:
+    #         continue
+    #     if p2.first == p1.first:
+    #         stats.append(p2.second)
+    #     elif p2.second == p1.first:
+    #         stats.append(p2.first)
+
+    # sum1 = np.zeros((len(pairs), 3))
+    # for i, pair in enumerate(pairs2):
+    #     sum1[i] = pair.airlight
+    # print np.mean(sum1, axis=0)
 
     logger.info("Removing outliers ...")
-    pairs = steps.remove_outliers(pairs, constants)
+    pairs2 = steps.remove_outliers(pairs2, constants)
 
     logger.info("Estimating global airlight ...")
     airlight = steps.estimate_airlight(pairs)

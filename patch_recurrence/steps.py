@@ -34,7 +34,7 @@ def generate_patches(scaled_imgs, constants):
                     patch_size=patch_size,
                 )
                 if patch.std_dev > std_dev_threshold:
-                    patch.store(sc, [j, i])
+                    patch.store(sc, [i, j])
                     img_patches.append(patch)
         patches.append(img_patches)
     return patches
@@ -116,6 +116,21 @@ def filter_pairs(patches, pairs, constants):
                 Pair(patches2[i], patches2[j])
             )
     return np.array(filtered_pairs)
+
+
+def remove_overlaps(pairs, constants):
+    patch_size = constants.PATCH_SIZE
+    new_pairs = []
+    for p in pairs:
+        l1, s1 = p.first.location, p.first.img.shape
+        l1_norm = (float(l1[0]) / s1[0], float(l1[1]) / s1[1])
+        p1 = (float(patch_size) / s1[0], float(patch_size) / s1[1])
+        l2, s2 = (p.second.location, p.second.img.shape)
+        l2_norm = float(l2[0]) / s2[0], float(l2[1]) / s2[2]
+        p2 = (float(patch_size) / s2[0], float(patch_size) / s2[1])
+        if np.abs(l1_norm[0] - l2_norm[0]) > min(p1[0], p2[0]) and np.abs(l1_norm[1] - l2_norm[1]) > min(p1[1], p2[1]):
+            new_pairs.append(p)
+    return new_pairs
 
 
 def remove_outliers(pairs, constants):

@@ -14,12 +14,15 @@ class Patch(object):
         # Subtract mean color from all channels individually
         self.air_free_patch = raw_patch - np.reshape(means, [1, 1, 3])
         # All three channels concatenated before normalizing
-        self.mean_free_patch = np.reshape(self.air_free_patch, [-1])
+        # mean_free_patch is 147 x 1, with channels B,G,R concatenated
+        self.mean_free_patch = np.reshape(np.transpose(self.air_free_patch, [2, 0, 1]), [-1])
         self.std_dev = np.std(self.mean_free_patch)
 
     def store(self, img, location):
         # If the patch passes std_dev test, the following vector used in KNN
         self.norm_patch = self.mean_free_patch / self.std_dev
+        # We want l2 norm of each vector to be 1
+        self.norm_patch = self.norm_patch / np.sqrt(self.patch_size * self.patch_size * 3)
         # Used to refer to original location in future if needed
         self.location = location
         self.img = img

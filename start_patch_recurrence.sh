@@ -1,3 +1,3 @@
 #!/bin/bash
 
-python src/dehaze.py "$@"
+python patch_recurrence/dehaze.py "$@"

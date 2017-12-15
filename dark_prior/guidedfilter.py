@@ -1,14 +1,7 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-"""Implementation for Guided Image Filtering
-Reference:
-http://research.microsoft.com/en-us/um/people/kahe/eccv10/
-"""
-
 from itertools import combinations_with_replacement
 from collections import defaultdict
 
+import cv2
 import numpy as np
 from numpy.linalg import inv
 
@@ -16,15 +9,6 @@ R, G, B = 0, 1, 2  # index for convenience
 
 
 def boxfilter(I, r):
-    """Fast box filter implementation.
-    Parameters
-    ----------
-    I:  a single channel/gray image data normalized to [0.0, 1.0]
-    r:  window radius
-    Return
-    -----------
-    The filtered image data.
-    """
     M, N = I.shape
     dest = np.zeros((M, N))
 
@@ -47,17 +31,6 @@ def boxfilter(I, r):
 
 
 def guided_filter(I, p, r=40, eps=1e-3):
-    """Refine a filter under the guidance of another (RGB) image.
-    Parameters
-    -----------
-    I:   an M * N * 3 RGB image for guidance.
-    p:   the M * N filter to be guided
-    r:   the radius of the guidance
-    eps: epsilon for the guided filter
-    Return
-    -----------
-    The guided filter.
-    """
     M, N = p.shape
     base = boxfilter(np.ones((M, N)), r)
 
