@@ -6,4 +6,6 @@ The implementation of "*Single Image Haze Removal Using Dark Channel Prior*" is 
 
 The implementation of "*Blind dehazing using internal patch recurrence*" is in progress.
 
-Some results have been added to `report.pdf`.
+## Results
+
+You can find some results in this [report](http://home.iitb.ac.in/~kalpesh1729/report.pdf).
