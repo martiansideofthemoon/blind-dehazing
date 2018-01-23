@@ -13,6 +13,10 @@ from bunch import bunchify
 # Our module imports
 import steps
 
+# debugging
+import pdb
+import sys
+
 from config.arguments import parser
 import tools
 
@@ -51,15 +55,29 @@ def main():
     img = cv2.imread(args.input, flags=cv2.IMREAD_COLOR)
     # image scaled in 0-1 range
     img = img / 255.0
+
     # Scale array must be in decreasing order
-    # scaled_imgs = steps.scale(img, [1, 0.75, 0.5, 0.375, 0.3, 0.25])
-    scaled_imgs = steps.scale(img, [1, 300.0 / 384, 200.0 / 384, 150.0 / 384, 120.0 / 384, 100.0 / 384])
+    # scaled_imgs = steps.scale(img, [1, 0.75, 0.5, 0.375, 0.3, 0.25]) -> 6 scales
+    #scaled_imgs = steps.scale(img, [1, 300.0 / 384, 200.0 / 384, 150.0 / 384, 120.0 / 384, 100.0 / 384])
+    scaled_imgs = steps.scale(img, [1])
 
     if not args.no_cache:
         patches, pairs = load(args.input)
     else:
         patches, pairs = None, None
     if patches is None and pairs is None:
+
+        # Purva start
+        logger.info("Extracting all patches ...")
+        patches = steps.generate_all_patches(scaled_imgs, constants)
+        steps.set_patch_buckets(patches, constants)
+        logger.info("Putting patches in buckets ...")
+        bucket_img = tools.set_buckets(img, patches[0], constants)
+        logger.info("Show buckety image ...")
+        tools.show_buckety_img([img, bucket_img])
+        sys.exit()
+        # Purva done
+
         logger.info("Extracting patches ...")
         patches = steps.generate_patches(scaled_imgs, constants)
 
@@ -74,27 +92,11 @@ def main():
     else:
         logger.info("Using saved patches and pairs ...")
 
-    logger.info("Filtering pairs of patches and estimating local airlight ...")
+    logger.info("Filtering pairs of patches for checking normalized correlation ...")
     pairs = steps.filter_pairs(patches, pairs, constants)
 
+    logger.info("Removing overlaps ...")
     pairs2 = steps.remove_overlaps(pairs, constants)
-
-    # k = 547
-    # p1 = pairs2[k]
-    # stats = []
-
-    # for i, p2 in enumerate(pairs2):
-    #     if i == k:
-    #         continue
-    #     if p2.first == p1.first:
-    #         stats.append(p2.second)
-    #     elif p2.second == p1.first:
-    #         stats.append(p2.first)
-
-    # sum1 = np.zeros((len(pairs), 3))
-    # for i, pair in enumerate(pairs2):
-    #     sum1[i] = pair.airlight
-    # print np.mean(sum1, axis=0)
 
     logger.info("Removing outliers ...")
     pairs2 = steps.remove_outliers(pairs2, constants)
@@ -102,7 +104,7 @@ def main():
     logger.info("Estimating global airlight ...")
     airlight = steps.estimate_airlight(pairs)
 
-    logger.info("Estimatied airlight is ...")
+    logger.info("Estimatied airlight is ...%s", str(airlight))
 
 if __name__ == '__main__':
     main()

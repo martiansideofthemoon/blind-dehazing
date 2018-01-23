@@ -3,7 +3,8 @@ import time
 import numpy as np
 
 from scipy import spatial
-from sklearn.neighbors import KDTree
+#from sklearn.neighbors import KDTree
+from sklearn.neighbors.kd_tree import KDTree
 
 from patch import Pair, Patch
 
@@ -39,10 +40,53 @@ def generate_patches(scaled_imgs, constants):
         patches.append(img_patches)
     return patches
 
+#..............................................................................................#
+# purva's functions
+
+# exactly like generate_patches without the std deviation condition
+def generate_all_patches(scaled_imgs, constants):
+    patch_size = constants.PATCH_SIZE
+    patches = []
+    for k, sc in enumerate(scaled_imgs):
+        img_patches = []
+        for i in range(sc.shape[0] - patch_size):
+            for j in range(sc.shape[1] - patch_size):
+                raw_patch = sc[i:i + patch_size, j:j + patch_size, :]
+                patch = Patch(
+                    raw_patch=raw_patch,
+                    patch_size=patch_size,
+                )
+                patch.store(sc, [i, j])
+                img_patches.append(patch)
+        patches.append(img_patches)
+    return patches
+
+
+# assigning bucket numbers to each patch
+def set_patch_buckets(patches, constants):
+    num_buckets = constants.NUM_BUCKETS
+    scaled_imgs = len(patches)
+    std_database = np.zeros((len(patches), len(patches[0])))
+    for k in range(scaled_imgs):
+        for index, patch in enumerate(patches[k]):
+            std_database[k][index] = patch.std_dev
+
+    min_std = np.amin(std_database)
+    max_std = np.amax(std_database)
+    bucket_size = (max_std - min_std) / num_buckets
+
+    for k in range(scaled_imgs):
+        for index, patch in enumerate(patches[k]):
+            for b in range(num_buckets):
+                if min_std + b * bucket_size <= std_database[k][index] <= min_std + (b+1) * bucket_size:
+                    patches[k][index].bucket = b
+                    break
+
+#..............................................................................................#
 
 def generate_pairs(patches, constants):
     k_nearest = constants.K_NEAREST
-    scaled_imgs = len(patches)
+    scaled_imgs = len(patches)      # only those patches with high std deviation
     # Convert the list of patch norms into numpy arrays
     patch_database = []
     for k in range(scaled_imgs):
@@ -128,6 +172,7 @@ def remove_overlaps(pairs, constants):
         l2, s2 = (p.second.location, p.second.img.shape)
         l2_norm = float(l2[0]) / s2[0], float(l2[1]) / s2[2]
         p2 = (float(patch_size) / s2[0], float(patch_size) / s2[1])
+        # To ensure that images are away from each other ?
         if np.abs(l1_norm[0] - l2_norm[0]) > min(p1[0], p2[0]) and np.abs(l1_norm[1] - l2_norm[1]) > min(p1[1], p2[1]):
             new_pairs.append(p)
     return new_pairs
