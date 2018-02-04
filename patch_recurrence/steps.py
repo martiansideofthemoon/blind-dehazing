@@ -1,17 +1,15 @@
 import cv2
-import time
 import numpy as np
 
 from scipy import spatial
-from sklearn.neighbors import KDTree
+from sklearn.neighbors.kd_tree import KDTree
 
 from patch import Pair, Patch
 
-import tools
-
 
 def scale(img, scales):
-    """Returns an array of images sized according to `scales`"""
+    """Returns an array of images sized according to `scales`
+    """
     outputs = []
     for sc in scales:
         outputs.append(
@@ -20,7 +18,7 @@ def scale(img, scales):
     return outputs
 
 
-def generate_patches(scaled_imgs, constants):
+def generate_patches(scaled_imgs, constants, all_patches):
     patch_size = constants.PATCH_SIZE
     std_dev_threshold = constants.STD_DEV_THRESHOLD
     patches = []
@@ -33,16 +31,54 @@ def generate_patches(scaled_imgs, constants):
                     raw_patch=raw_patch,
                     patch_size=patch_size,
                 )
-                if patch.std_dev > std_dev_threshold:
+                if all_patches or patch.std_dev > std_dev_threshold:
                     patch.store(sc, [i, j])
                     img_patches.append(patch)
         patches.append(img_patches)
     return patches
 
 
+def smoothen(scaled_imgs, patches, constants):
+    """Applying Gaussian filter
+    to smoothen std deviations of all patches
+    """
+    patch_size = constants.PATCH_SIZE
+
+    for k in range(len(patches)):
+        img = scaled_imgs[k]
+        patch = patches[k]
+
+        length_sd_array = img.shape[0] - patch_size
+        width_sd_array = img.shape[1] - patch_size
+
+        std_database = np.reshape(map(lambda x: x.std_dev, patch), [length_sd_array, width_sd_array])
+        blur = np.reshape(cv2.GaussianBlur(std_database, (7, 7), sigmaX=6, sigmaY=6), [-1])
+        map(lambda (i, x): setattr(x, 'std_dev', blur[i]), enumerate(patch))
+
+
+def set_patch_buckets(patches, constants):
+    """Assigning bucket numbers to each patch
+    """
+    num_buckets = constants.NUM_BUCKETS
+    scaled_imgs = len(patches)
+    width = max(len(patches[i]) for i in range(scaled_imgs))
+
+    std_database = np.zeros((scaled_imgs, width))
+    for k in range(scaled_imgs):
+        for index, patch in enumerate(patches[k]):
+            std_database[k][index] = patch.std_dev
+
+    min_std = np.amin(std_database)
+    max_std = np.amax(std_database)
+
+    norm_std = np.floor((std_database - min_std) * (num_buckets - 1) / (max_std - min_std))
+    for k in range(scaled_imgs):
+        map(lambda (i,x): setattr(x, 'bucket', norm_std[k][i]), enumerate(patches[k]))
+
+
 def generate_pairs(patches, constants):
     k_nearest = constants.K_NEAREST
-    scaled_imgs = len(patches)
+    scaled_imgs = len(patches)      # only those patches with high std deviation
     # Convert the list of patch norms into numpy arrays
     patch_database = []
     for k in range(scaled_imgs):
@@ -128,6 +164,7 @@ def remove_overlaps(pairs, constants):
         l2, s2 = (p.second.location, p.second.img.shape)
         l2_norm = float(l2[0]) / s2[0], float(l2[1]) / s2[2]
         p2 = (float(patch_size) / s2[0], float(patch_size) / s2[1])
+        # To ensure that images are away from each other ?
         if np.abs(l1_norm[0] - l2_norm[0]) > min(p1[0], p2[0]) and np.abs(l1_norm[1] - l2_norm[1]) > min(p1[1], p2[1]):
             new_pairs.append(p)
     return new_pairs

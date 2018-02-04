@@ -7,6 +7,7 @@ import tools
 
 class Patch(object):
     def __init__(self, raw_patch, patch_size):
+        self.bucket = 0
         self.raw_patch = raw_patch
         self.patch_size = patch_size
         # Compute mean in each of the three channels individually
@@ -14,7 +15,7 @@ class Patch(object):
         # Subtract mean color from all channels individually
         self.air_free_patch = raw_patch - np.reshape(means, [1, 1, 3])
         # All three channels concatenated before normalizing
-        # mean_free_patch is 147 x 1, with channels B,G,R concatenated
+        # mean_free_patch is 147 x 1, with channels B,G,R concatenated (7x7x3)
         self.mean_free_patch = np.reshape(np.transpose(self.air_free_patch, [2, 0, 1]), [-1])
         self.std_dev = np.std(self.mean_free_patch)
 
@@ -30,6 +31,7 @@ class Patch(object):
 
 class Pair(object):
     def __init__(self, first, second):
+        self.weight = 1.0
         self.first = first
         self.second = second
         distance = spatial.distance.correlation(
@@ -53,9 +55,10 @@ class Pair(object):
     def calculate_outlier(self):
         raw1 = np.reshape(self.first.raw_patch, [-1, 3])
         raw2 = np.reshape(self.second.raw_patch, [-1, 3])
-        airlight = np.reshape(self.airlight, [1, 3])
+        airlight = np.reshape(self.airlight, [1, 3])    # split airlight along BGR
         std1 = self.first.std_dev
         std2 = self.second.std_dev
+        # Checking maxima across BGR for both patches (equn 15)
         self.tlb1 = np.amax(1 - raw1 / airlight, axis=1)
         self.tlb2 = np.amax(1 - raw2 / airlight, axis=1)
 

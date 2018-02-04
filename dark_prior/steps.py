@@ -1,8 +1,6 @@
 import cv2
 import numpy as np
 
-import tools
-
 from guidedfilter import guided_filter
 
 
@@ -10,7 +8,7 @@ def generate_dark_channel(img, constants):
     patch_size = constants.PATCH_SIZE
     half = int(patch_size / 2)
     height, width, _ = img.shape
-    dark_channel = np.copy(img[:, :, 0])
+    dark_channel = np.zeros((height, width))
     for i in range(height):
         for j in range(width):
             h1, h2 = max(0, i - half), min(height - 1, i + half)
