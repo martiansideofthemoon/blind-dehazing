@@ -33,7 +33,7 @@ def main():
     print('*********************************************************************\n')
 
     logger.info("Loading image %s ..." % args.input)
-    img = cv2.imread(args.input, flags=cv2.IMREAD_COLOR)    # convert image to 3 color RGB
+    img = cv2.imread(args.input, flags=cv2.IMREAD_COLOR)
     # image scaled in 0-1 range
     img = img / 255.0
 

@@ -3,7 +3,6 @@ import time
 import numpy as np
 
 from scipy import spatial
-#from sklearn.neighbors import KDTree
 from sklearn.neighbors.kd_tree import KDTree
 
 from patch import Pair, Patch
@@ -21,7 +20,8 @@ def scale(img, scales):
     return outputs
 
 
-def generate_patches(scaled_imgs, constants):
+def generate_patches(scaled_imgs, constants, all_patches):
+    all_patches_required = all_patches
     patch_size = constants.PATCH_SIZE
     std_dev_threshold = constants.STD_DEV_THRESHOLD
     patches = []
@@ -34,35 +34,40 @@ def generate_patches(scaled_imgs, constants):
                     raw_patch=raw_patch,
                     patch_size=patch_size,
                 )
-                if patch.std_dev > std_dev_threshold:
+                if all_patches_required or patch.std_dev > std_dev_threshold:
                     patch.store(sc, [i, j])
                     img_patches.append(patch)
         patches.append(img_patches)
     return patches
 
-#..............................................................................................#
-# purva's functions
 
-# exactly like generate_patches without the std deviation condition
-def generate_all_patches(scaled_imgs, constants):
+'''
+Applying Gaussian filter to smoothen std deviations of all patches
+'''
+def smoothen(scaled_imgs, patches, constants):
     patch_size = constants.PATCH_SIZE
-    patches = []
-    for k, sc in enumerate(scaled_imgs):
-        img_patches = []
-        for i in range(sc.shape[0] - patch_size):
-            for j in range(sc.shape[1] - patch_size):
-                raw_patch = sc[i:i + patch_size, j:j + patch_size, :]
-                patch = Patch(
-                    raw_patch=raw_patch,
-                    patch_size=patch_size,
-                )
-                patch.store(sc, [i, j])
-                img_patches.append(patch)
-        patches.append(img_patches)
-    return patches
+    img = scaled_imgs[0]
+    patch = patches[0]
+
+    length_sd_array = img.shape[0] - patch_size
+    width_sd_array = img.shape[1] - patch_size
+    patch = np.reshape(patch, [length_sd_array, width_sd_array])
+    std_database = np.zeros((length_sd_array, width_sd_array))
+
+    for i in range(length_sd_array):
+        for j in range(width_sd_array):
+            std_database[i][j] = patch[i][j].std_dev
+
+    # smoothen std_database
+    blur = cv2.GaussianBlur(std_database,(7,7),sigmaX=6, sigmaY=6)
+    for i in range(length_sd_array):
+        for j in range(width_sd_array):
+            patch[i][j].std_dev = blur[i][j]
 
 
-# assigning bucket numbers to each patch
+'''
+Assigning bucket numbers to each patch
+'''
 def set_patch_buckets(patches, constants):
     num_buckets = constants.NUM_BUCKETS
     scaled_imgs = len(patches)
@@ -73,16 +78,11 @@ def set_patch_buckets(patches, constants):
 
     min_std = np.amin(std_database)
     max_std = np.amax(std_database)
-    bucket_size = (max_std - min_std) / num_buckets
 
+    norm_std = np.floor((std_database - min_std) * num_buckets / (max_std - min_std))
     for k in range(scaled_imgs):
-        for index, patch in enumerate(patches[k]):
-            for b in range(num_buckets):
-                if min_std + b * bucket_size <= std_database[k][index] <= min_std + (b+1) * bucket_size:
-                    patches[k][index].bucket = b
-                    break
+        map(lambda (i,x): setattr(x, 'bucket', norm_std[k][i]), enumerate(patches[k]))
 
-#..............................................................................................#
 
 def generate_pairs(patches, constants):
     k_nearest = constants.K_NEAREST

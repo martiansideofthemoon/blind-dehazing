@@ -13,10 +13,6 @@ from bunch import bunchify
 # Our module imports
 import steps
 
-# debugging
-import pdb
-import sys
-
 from config.arguments import parser
 import tools
 
@@ -67,19 +63,29 @@ def main():
         patches, pairs = None, None
     if patches is None and pairs is None:
 
-        # Purva start
         logger.info("Extracting all patches ...")
-        patches = steps.generate_all_patches(scaled_imgs, constants)
-        steps.set_patch_buckets(patches, constants)
+        patches = steps.generate_patches(scaled_imgs, constants, 1)
+
+        '''
+        logger.info("Smoothening std deviations of patches ...")
+        steps.smoothen(scaled_imgs, patches, constants)
+        '''
+
         logger.info("Putting patches in buckets ...")
+        steps.set_patch_buckets(patches, constants)
+
+        logger.info("Assigning colors to each bucket ...")
         bucket_img = tools.set_buckets(img, patches[0], constants)
-        logger.info("Show buckety image ...")
-        tools.show_buckety_img([img, bucket_img])
+
+        logger.info("Displaying smooth buckety image ...")
+        tools.show_buckety_img([img, bucket_img], constants)
+
+
         sys.exit()
-        # Purva done
+
 
         logger.info("Extracting patches ...")
-        patches = steps.generate_patches(scaled_imgs, constants)
+        patches = steps.generate_patches(scaled_imgs, constants, 0)
 
         logger.info("Generating pairs of patches ...")
         pairs = steps.generate_pairs(patches, constants)

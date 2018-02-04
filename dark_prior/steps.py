@@ -3,12 +3,6 @@ import numpy as np
 
 from guidedfilter import guided_filter
 
-# Debugging only
-import pdb
-#pdb.set_trace()
-import tools
-#tools.show_img([dark_channel])
-
 
 def generate_dark_channel(img, constants):
     patch_size = constants.PATCH_SIZE
