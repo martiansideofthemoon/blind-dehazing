@@ -51,10 +51,10 @@ def show_pair(pair):
     plt.show()
 
 
-'''
-Assigning colors to each patch based on bucket number - also, resizing img
-'''
 def set_buckets(img, patch, constants):
+    """Assigning colors to each patch based on bucket number
+    - also, resizing img
+    """
     num_buckets = constants.NUM_BUCKETS
     patch_size = constants.PATCH_SIZE
 
@@ -64,24 +64,20 @@ def set_buckets(img, patch, constants):
     img = np.reshape(img, [-1, 3])
 
     bucket_colors = []
-    l1 = [(0, 0, i*2 / num_buckets) for i in range(int(num_buckets/2))]
-    l2 = [(i*2 / num_buckets, i*2 / num_buckets, 1) for i in range(int(num_buckets/2))]
+    l1 = [(0, 0, i * 2 / num_buckets) for i in range(int(num_buckets / 2))]
+    l2 = [(i * 2 / num_buckets, i * 2 / num_buckets, 1) for i in range(int(num_buckets / 2))]
     bucket_colors = list(reversed(l1 + l2))
 
-    for i in range(new_height*new_width):
-        for j in range(num_buckets):
-            if patch[i].bucket == j:
-                img[i] = bucket_colors[j]
-                break
+    for i in range(new_height * new_width):
+        img[i] = bucket_colors[int(patch[i].bucket)]
 
     img = np.reshape(img, [new_height, new_width, 3])
     return img
 
 
-'''
-Display buckety image
-'''
 def show_buckety_img(imgs, constants):
+    """Display buckety image
+    """
     num_buckets = constants.NUM_BUCKETS
     # setup the figure
     fig = plt.figure()
@@ -94,16 +90,16 @@ def show_buckety_img(imgs, constants):
     ax = fig.add_subplot(3, 4, 4)
     plt.axis("off")
     bucket_colors = []
-    l1 = [(0, 0, i*2 / num_buckets) for i in range(int(num_buckets/2))]
-    l2 = [(i*2 / num_buckets, i*2 / num_buckets, 1) for i in range(int(num_buckets/2))]
+    l1 = [(0, 0, i * 2 / num_buckets) for i in range(int(num_buckets / 2))]
+    l2 = [(i * 2 / num_buckets, i * 2 / num_buckets, 1) for i in range(int(num_buckets / 2))]
     bucket_colors = list(reversed(l1 + l2))
 
-    legend_data = [(i+1, list(reversed(bucket_colors[i])), i+1) for i in range(num_buckets)]
+    legend_data = [(i + 1, list(reversed(bucket_colors[i])), i + 1) for i in range(num_buckets)]
 
     handles = [
-        Rectangle((0,0),1,1, color = [v for v in c]) for k,c,n in legend_data
+        Rectangle((0, 0), 1, 1, color = [v for v in c]) for k, c, n in legend_data
     ]
-    labels = [n for k,c,n in legend_data]
+    labels = [n for k, c, n in legend_data]
 
     fontP = FontProperties()
     fontP.set_size('small')

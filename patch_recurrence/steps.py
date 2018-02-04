@@ -1,5 +1,4 @@
 import cv2
-import time
 import numpy as np
 
 from scipy import spatial
@@ -7,11 +6,10 @@ from sklearn.neighbors.kd_tree import KDTree
 
 from patch import Pair, Patch
 
-import tools
-
 
 def scale(img, scales):
-    """Returns an array of images sized according to `scales`"""
+    """Returns an array of images sized according to `scales`
+    """
     outputs = []
     for sc in scales:
         outputs.append(
@@ -21,7 +19,6 @@ def scale(img, scales):
 
 
 def generate_patches(scaled_imgs, constants, all_patches):
-    all_patches_required = all_patches
     patch_size = constants.PATCH_SIZE
     std_dev_threshold = constants.STD_DEV_THRESHOLD
     patches = []
@@ -34,44 +31,39 @@ def generate_patches(scaled_imgs, constants, all_patches):
                     raw_patch=raw_patch,
                     patch_size=patch_size,
                 )
-                if all_patches_required or patch.std_dev > std_dev_threshold:
+                if all_patches or patch.std_dev > std_dev_threshold:
                     patch.store(sc, [i, j])
                     img_patches.append(patch)
         patches.append(img_patches)
     return patches
 
 
-'''
-Applying Gaussian filter to smoothen std deviations of all patches
-'''
 def smoothen(scaled_imgs, patches, constants):
+    """Applying Gaussian filter
+    to smoothen std deviations of all patches
+    """
     patch_size = constants.PATCH_SIZE
-    img = scaled_imgs[0]
-    patch = patches[0]
 
-    length_sd_array = img.shape[0] - patch_size
-    width_sd_array = img.shape[1] - patch_size
-    patch = np.reshape(patch, [length_sd_array, width_sd_array])
-    std_database = np.zeros((length_sd_array, width_sd_array))
+    for k in range(len(patches)):
+        img = scaled_imgs[k]
+        patch = patches[k]
 
-    for i in range(length_sd_array):
-        for j in range(width_sd_array):
-            std_database[i][j] = patch[i][j].std_dev
+        length_sd_array = img.shape[0] - patch_size
+        width_sd_array = img.shape[1] - patch_size
 
-    # smoothen std_database
-    blur = cv2.GaussianBlur(std_database,(7,7),sigmaX=6, sigmaY=6)
-    for i in range(length_sd_array):
-        for j in range(width_sd_array):
-            patch[i][j].std_dev = blur[i][j]
+        std_database = np.reshape(map(lambda x: x.std_dev, patch), [length_sd_array, width_sd_array])
+        blur = np.reshape(cv2.GaussianBlur(std_database, (7, 7), sigmaX=6, sigmaY=6), [-1])
+        map(lambda (i, x): setattr(x, 'std_dev', blur[i]), enumerate(patch))
 
 
-'''
-Assigning bucket numbers to each patch
-'''
 def set_patch_buckets(patches, constants):
+    """Assigning bucket numbers to each patch
+    """
     num_buckets = constants.NUM_BUCKETS
     scaled_imgs = len(patches)
-    std_database = np.zeros((len(patches), len(patches[0])))
+    width = max(len(patches[i]) for i in range(scaled_imgs))
+
+    std_database = np.zeros((scaled_imgs, width))
     for k in range(scaled_imgs):
         for index, patch in enumerate(patches[k]):
             std_database[k][index] = patch.std_dev
@@ -79,7 +71,7 @@ def set_patch_buckets(patches, constants):
     min_std = np.amin(std_database)
     max_std = np.amax(std_database)
 
-    norm_std = np.floor((std_database - min_std) * num_buckets / (max_std - min_std))
+    norm_std = np.floor((std_database - min_std) * (num_buckets - 1) / (max_std - min_std))
     for k in range(scaled_imgs):
         map(lambda (i,x): setattr(x, 'bucket', norm_std[k][i]), enumerate(patches[k]))
 

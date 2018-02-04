@@ -62,14 +62,11 @@ def main():
     else:
         patches, pairs = None, None
     if patches is None and pairs is None:
-
         logger.info("Extracting all patches ...")
-        patches = steps.generate_patches(scaled_imgs, constants, 1)
+        patches = steps.generate_patches(scaled_imgs, constants, True)
 
-        '''
         logger.info("Smoothening std deviations of patches ...")
         steps.smoothen(scaled_imgs, patches, constants)
-        '''
 
         logger.info("Putting patches in buckets ...")
         steps.set_patch_buckets(patches, constants)
@@ -80,15 +77,27 @@ def main():
         logger.info("Displaying smooth buckety image ...")
         tools.show_buckety_img([img, bucket_img], constants)
 
+        '''
+        logger.info("Generating pairs of patches ...")
+        pairs = steps.generate_pairs(patches, constants)
+
+        print pairs.shape
+        print pairs
+        '''
 
         sys.exit()
 
-
         logger.info("Extracting patches ...")
-        patches = steps.generate_patches(scaled_imgs, constants, 0)
+        patches = steps.generate_patches(scaled_imgs, constants, False)
+
+        logger.info("Smoothening std deviations of patches ...")
+        steps.smoothen(scaled_imgs, patches, constants)
 
         logger.info("Generating pairs of patches ...")
         pairs = steps.generate_pairs(patches, constants)
+
+        print pairs.shape
+        print pairs
 
         logger.info("Removing duplicates ...")
         pairs = steps.remove_duplicates(pairs)
