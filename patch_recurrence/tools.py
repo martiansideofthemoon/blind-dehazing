@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from matplotlib.font_manager import FontProperties
 import numpy as np
-import pdb
+import collections
 
 
 def show_img(imgs):
@@ -107,3 +107,29 @@ def show_buckety_img(imgs, constants):
 
     # show the images
     plt.show()
+
+
+def histogram(pairs,i):
+    """Plotting histogram of R, G, B (ith) airlight estimates
+    """
+    x = []
+    for pair in pairs:
+        x.append(pair.airlight[i])
+    num_bins = 100
+
+    if i == 0:
+        t = 'blue'
+    elif i == 1:
+        t = 'green'
+    else:
+        t = 'red'
+
+    n, bins, patches = plt.hist(x, num_bins, facecolor=t, alpha=0.5)
+
+    plt.xlabel('Pairwise estimated airlight')
+    plt.ylabel('Number of pairs')
+    plt.title(r'$\mathrm{Histogram}$')
+    plt.grid(True)
+
+    plt.show()
+

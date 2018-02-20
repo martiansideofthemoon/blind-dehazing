@@ -1,4 +1,5 @@
 import cv2
+import random
 import numpy as np
 
 from scipy import spatial
@@ -76,6 +77,59 @@ def set_patch_buckets(patches, constants):
         map(lambda (i,x): setattr(x, 'bucket', norm_std[k][i]), enumerate(patches[k]))
 
 
+def find_nn(patches, p, constants):
+    """Returns list of K patches which are NNs to p
+    """
+    k_nearest = constants.K_NEAREST
+    patch_database = []
+    patch_database.append(
+        np.vstack([patch.norm_patch for i, patch in enumerate(patches[0]) if i != p])
+    )
+
+    candidate_database = []
+    candidate_database.append(
+        np.vstack([patch.norm_patch for i, patch in enumerate(patches[0]) if 0 <= patch.bucket <= 5])
+    )
+
+    # Form KD Tree
+    p1 = np.concatenate(candidate_database[0:])
+    kdt = KDTree(p1, leaf_size=30, metric='euclidean')
+
+    # Find NNs in KD Tree
+    t = []
+    t.append(patches[0][p].norm_patch)
+    nn = kdt.query(t, k=k_nearest, return_distance=False, sort_results=False)
+    nn_final_list = []
+    nn_final_list.append([x for x in nn[0]])
+    nn_final_list[0].append(p)
+    return nn_final_list[0]
+
+
+def generate_pairs1(img, patches, constants):
+    """
+    Choose some random patches with buckets in bucket range 6-9
+    call find_nn for each of them and append to array
+    return that array
+    """
+    patch_size = constants.PATCH_SIZE
+
+    patch_database = []
+    patch_database.append(
+        [patch for i, patch in enumerate(patches[0]) if 6 <= patch.bucket <= 9]
+    )
+
+    high_sd_patches = patch_database[0]
+    #top_few = random.sample(high_sd_patches, 200)
+    top_few = high_sd_patches
+
+    pairs = []
+    for p in top_few:
+        x = (p.location[0] * (img.shape[1] - patch_size)) + p.location[1]
+        nn = find_nn(patches, x, constants)
+        pairs.append(nn)
+    return pairs
+
+
 def generate_pairs(patches, constants):
     k_nearest = constants.K_NEAREST
     scaled_imgs = len(patches)      # only those patches with high std deviation
@@ -85,6 +139,7 @@ def generate_pairs(patches, constants):
         patch_database.append(
             np.vstack([patch.norm_patch for patch in patches[k]])
         )
+
     # Find list of nearest neighbours for each patch
     # `total` is used to correct indices since we successively build smaller KD trees
     nearest = []
@@ -114,16 +169,16 @@ def generate_pairs(patches, constants):
 def remove_duplicates(pairs):
     unique_pairs = []
     pair_list = {}
-    for i in range(pairs.shape[0]):
-        for j in range(pairs.shape[1]):
+    for i in range(len(pairs)):
+        for j in range(len(pairs[0]) - 1):
             # This is to remove self-matches
-            if i == pairs[i, j]:
+            if i == pairs[i][j]:
                 continue
-            if ("%d,%d" % (i, pairs[i, j]) not in pair_list):
+            if ("%d,%d" % (pairs[i][9], pairs[i][j]) not in pair_list):
                 # This is stored to remove symmetric duplicates
-                pair_list["%d,%d" % (i, pairs[i, j])] = 1
-                pair_list["%d,%d" % (pairs[i, j], i)] = 1
-                unique_pairs.append([i, pairs[i, j]])
+                pair_list["%d,%d" % (pairs[i][9], pairs[i][j])] = 1
+                pair_list["%d,%d" % (pairs[i][j], pairs[i][9])] = 1
+                unique_pairs.append([pairs[i][9], pairs[i][j]])
     return unique_pairs
 
 

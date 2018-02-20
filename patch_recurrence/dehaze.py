@@ -6,7 +6,6 @@ import random
 import sys
 import yaml
 import numpy as np
-import time
 
 from bunch import bunchify
 
@@ -71,39 +70,14 @@ def main():
         logger.info("Putting patches in buckets ...")
         steps.set_patch_buckets(patches, constants)
 
-        logger.info("Assigning colors to each bucket ...")
-        bucket_img = tools.set_buckets(img, patches[0], constants)
-
-        logger.info("Displaying smooth buckety image ...")
-        tools.show_buckety_img([img, bucket_img], constants)
-
-        '''
         logger.info("Generating pairs of patches ...")
-        pairs = steps.generate_pairs(patches, constants)
-
-        print pairs.shape
-        print pairs
-        '''
-
-        sys.exit()
-
-        logger.info("Extracting patches ...")
-        patches = steps.generate_patches(scaled_imgs, constants, False)
-
-        logger.info("Smoothening std deviations of patches ...")
-        steps.smoothen(scaled_imgs, patches, constants)
-
-        logger.info("Generating pairs of patches ...")
-        pairs = steps.generate_pairs(patches, constants)
-
-        print pairs.shape
-        print pairs
+        pairs = steps.generate_pairs1(img, patches, constants)
 
         logger.info("Removing duplicates ...")
         pairs = steps.remove_duplicates(pairs)
 
-        logger.info("Saving patches and pairs ...")
-        save(args.input, patches, pairs)
+        #logger.info("Saving patches and pairs ...")
+        #save(args.input, patches, pairs)
     else:
         logger.info("Using saved patches and pairs ...")
 
@@ -115,6 +89,11 @@ def main():
 
     logger.info("Removing outliers ...")
     pairs2 = steps.remove_outliers(pairs2, constants)
+
+    logger.info("Plotting histogram ...")
+    tools.histogram(pairs,0)
+    tools.histogram(pairs,1)
+    tools.histogram(pairs,2)
 
     logger.info("Estimating global airlight ...")
     airlight = steps.estimate_airlight(pairs)

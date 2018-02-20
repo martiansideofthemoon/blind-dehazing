@@ -31,7 +31,7 @@ class Patch(object):
 
 class Pair(object):
     def __init__(self, first, second):
-        self.weight = 1.0
+        self.weight = 0.0
         self.first = first
         self.second = second
         distance = spatial.distance.correlation(
