@@ -1,10 +1,12 @@
 import cv2
+
 import numpy as np
 
-from scipy import spatial
-from sklearn.neighbors.kd_tree import KDTree
-
 from patch import Pair, Patch
+
+from scipy import spatial
+
+from sklearn.neighbors.kd_tree import KDTree
 
 
 def scale(img, scales):
@@ -73,58 +75,44 @@ def set_patch_buckets(patches, constants):
 
     norm_std = np.floor((std_database - min_std) * (num_buckets - 1) / (max_std - min_std))
     for k in range(scaled_imgs):
-        map(lambda (i,x): setattr(x, 'bucket', norm_std[k][i]), enumerate(patches[k]))
+        map(lambda (i, x): setattr(x, 'bucket', norm_std[k][i]), enumerate(patches[k]))
 
 
-def generate_pairs(patches, constants):
+def generate_pairs(imgs, patches, constants):
     k_nearest = constants.K_NEAREST
-    scaled_imgs = len(patches)      # only those patches with high std deviation
-    # Convert the list of patch norms into numpy arrays
-    patch_database = []
+    scaled_imgs = len(patches)
+
+    pairs = []
+    query_database = []
+    candidate_database = []
+    index_database = []
+    length_database = []
     for k in range(scaled_imgs):
-        patch_database.append(
-            np.vstack([patch.norm_patch for patch in patches[k]])
+        query_database.append(
+            np.vstack([[patch.norm_patch for patch in patches[k] if 6 <= patch.bucket <= 9]])
         )
+        x = [index for index, patch in enumerate(patches[k]) if 6 <= patch.bucket <= 9]
+        index_database.append(x)
+        length_database.append(len(x))
+        candidate_database.append(
+            np.vstack([[patch.norm_patch for i, patch in enumerate(patches[k]) if 0 <= patch.bucket <= 5]])
+        )
+
+    p1 = np.concatenate(candidate_database)
+    kdt = KDTree(p1, leaf_size=30, metric='euclidean')
+
     # Find list of nearest neighbours for each patch
-    # `total` is used to correct indices since we successively build smaller KD trees
-    nearest = []
+    # `total` is used to correct indices of queried patches for every iteration
     total = 0
     for k in range(scaled_imgs):
-        # This is done to avoid wasting time finding symmetric patches
-        p1 = np.concatenate(patch_database[k:])
-        kdt = KDTree(p1, leaf_size=30, metric='euclidean')
+        nn = kdt.query(query_database[k], k=k_nearest, return_distance=False, sort_results=False)
+        q = [total + index_database[k][i] for i in range(length_database[k])]
+        for i in range(len(nn)):
+            for j in range(k_nearest):
+                pairs.append([q[i], nn[i][j]])
+        total += len(patches[k])
 
-        # k+1 taken to account for self-matches
-        k_value = min(k_nearest + 1, len(p1))
-        nn = kdt.query(patch_database[k], k=k_value, return_distance=False, sort_results=False)
-
-        # in the case p1 is very small, less than k
-        if k_value < k_nearest + 1:
-            extra = np.expand_dims(np.arange(nn.shape[0]), axis=1)
-            for i in range(k_nearest + 1 - k_value):
-                nn = np.concatenate((nn, extra), axis=1)
-
-        nearest.append(total + nn)
-
-        total += len(patch_database[k])
-
-    return np.concatenate(nearest)
-
-
-def remove_duplicates(pairs):
-    unique_pairs = []
-    pair_list = {}
-    for i in range(pairs.shape[0]):
-        for j in range(pairs.shape[1]):
-            # This is to remove self-matches
-            if i == pairs[i, j]:
-                continue
-            if ("%d,%d" % (i, pairs[i, j]) not in pair_list):
-                # This is stored to remove symmetric duplicates
-                pair_list["%d,%d" % (i, pairs[i, j])] = 1
-                pair_list["%d,%d" % (pairs[i, j], i)] = 1
-                unique_pairs.append([i, pairs[i, j]])
-    return unique_pairs
+    return pairs
 
 
 def filter_pairs(patches, pairs, constants):
@@ -152,22 +140,6 @@ def filter_pairs(patches, pairs, constants):
                 Pair(patches2[i], patches2[j])
             )
     return np.array(filtered_pairs)
-
-
-def remove_overlaps(pairs, constants):
-    patch_size = constants.PATCH_SIZE
-    new_pairs = []
-    for p in pairs:
-        l1, s1 = p.first.location, p.first.img.shape
-        l1_norm = (float(l1[0]) / s1[0], float(l1[1]) / s1[1])
-        p1 = (float(patch_size) / s1[0], float(patch_size) / s1[1])
-        l2, s2 = (p.second.location, p.second.img.shape)
-        l2_norm = float(l2[0]) / s2[0], float(l2[1]) / s2[2]
-        p2 = (float(patch_size) / s2[0], float(patch_size) / s2[1])
-        # To ensure that images are away from each other ?
-        if np.abs(l1_norm[0] - l2_norm[0]) > min(p1[0], p2[0]) and np.abs(l1_norm[1] - l2_norm[1]) > min(p1[1], p2[1]):
-            new_pairs.append(p)
-    return new_pairs
 
 
 def remove_outliers(pairs, constants):

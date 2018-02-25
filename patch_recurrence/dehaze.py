@@ -1,20 +1,17 @@
-import cv2
 import cPickle
 import logging
 import os
-import random
 import sys
-import yaml
-import numpy as np
-import time
 
 from bunch import bunchify
 
-# Our module imports
+from config.arguments import parser
+
+import cv2
+
 import steps
 
-from config.arguments import parser
-import tools
+import yaml
 
 
 logging.basicConfig(
@@ -53,9 +50,7 @@ def main():
     img = img / 255.0
 
     # Scale array must be in decreasing order
-    # scaled_imgs = steps.scale(img, [1, 0.75, 0.5, 0.375, 0.3, 0.25]) -> 6 scales
-    #scaled_imgs = steps.scale(img, [1, 300.0 / 384, 200.0 / 384, 150.0 / 384, 120.0 / 384, 100.0 / 384])
-    scaled_imgs = steps.scale(img, [1])
+    scaled_imgs = steps.scale(img, [1, 300.0 / 384, 200.0 / 384, 150.0 / 384, 120.0 / 384, 100.0 / 384])
 
     if not args.no_cache:
         patches, pairs = load(args.input)
@@ -71,55 +66,24 @@ def main():
         logger.info("Putting patches in buckets ...")
         steps.set_patch_buckets(patches, constants)
 
-        logger.info("Assigning colors to each bucket ...")
-        bucket_img = tools.set_buckets(img, patches[0], constants)
-
-        logger.info("Displaying smooth buckety image ...")
-        tools.show_buckety_img([img, bucket_img], constants)
-
-        '''
         logger.info("Generating pairs of patches ...")
-        pairs = steps.generate_pairs(patches, constants)
+        pairs = steps.generate_pairs(scaled_imgs, patches, constants)
 
-        print pairs.shape
-        print pairs
-        '''
-
-        sys.exit()
-
-        logger.info("Extracting patches ...")
-        patches = steps.generate_patches(scaled_imgs, constants, False)
-
-        logger.info("Smoothening std deviations of patches ...")
-        steps.smoothen(scaled_imgs, patches, constants)
-
-        logger.info("Generating pairs of patches ...")
-        pairs = steps.generate_pairs(patches, constants)
-
-        print pairs.shape
-        print pairs
-
-        logger.info("Removing duplicates ...")
-        pairs = steps.remove_duplicates(pairs)
-
-        logger.info("Saving patches and pairs ...")
-        save(args.input, patches, pairs)
+        # logger.info("Saving patches and pairs ...")
+        # save(args.input, patches, pairs)
     else:
         logger.info("Using saved patches and pairs ...")
 
-    logger.info("Filtering pairs of patches for checking normalized correlation ...")
+    logger.info("Filtering pairs for checking normalized correlation ...")
     pairs = steps.filter_pairs(patches, pairs, constants)
 
-    logger.info("Removing overlaps ...")
-    pairs2 = steps.remove_overlaps(pairs, constants)
-
     logger.info("Removing outliers ...")
-    pairs2 = steps.remove_outliers(pairs2, constants)
+    pairs = steps.remove_outliers(pairs, constants)
 
     logger.info("Estimating global airlight ...")
     airlight = steps.estimate_airlight(pairs)
 
-    logger.info("Estimatied airlight is ...%s", str(airlight))
+    logger.info("Estimated airlight is ...%s", str(airlight))
 
 if __name__ == '__main__':
     main()
