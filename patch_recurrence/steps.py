@@ -73,9 +73,7 @@ def set_patch_buckets(patches, constants):
     min_std = np.amin(std_database)
     max_std = np.amax(std_database)
 
-    norm_std = np.floor(
-        (std_database - min_std) * (num_buckets - 1) / (max_std - min_std)
-    )
+    norm_std = np.floor((std_database - min_std) * (num_buckets - 1) / (max_std - min_std))
     for k in range(scaled_imgs):
         map(lambda (i, x): setattr(x, 'bucket', norm_std[k][i]), enumerate(patches[k]))
 
@@ -93,9 +91,7 @@ def generate_pairs(imgs, patches, constants):
         query_database.append(
             np.vstack([[patch.norm_patch for patch in patches[k] if 6 <= patch.bucket <= 9]])
         )
-        x = [index for index, patch in enumerate(patches[k])
-             if 6 <= patch.bucket <= 9
-             ]
+        x = [index for index, patch in enumerate(patches[k]) if 6 <= patch.bucket <= 9]
         index_database.append(x)
         length_database.append(len(x))
         candidate_database.append(
@@ -110,12 +106,10 @@ def generate_pairs(imgs, patches, constants):
     total = 0
     for k in range(scaled_imgs):
         nn = kdt.query(query_database[k], k=k_nearest, return_distance=False, sort_results=False)
-        # Append query patch index at the end of nn
-        b = np.array([[total + index_database[k][i] for i in range(length_database[k])]])
-        nn = np.concatenate((nn, b.T), axis=1)
+        q = [total + index_database[k][i] for i in range(length_database[k])]
         for i in range(len(nn)):
             for j in range(k_nearest):
-                pairs.append([nn[i][9], nn[i][j]])
+                pairs.append([q[i], nn[i][j]])
         total += len(patches[k])
 
     return pairs

@@ -50,10 +50,7 @@ def main():
     img = img / 255.0
 
     # Scale array must be in decreasing order
-    scaled_imgs = steps.scale(
-        img,
-        [1, 300.0 / 384, 200.0 / 384, 150.0 / 384, 120.0 / 384, 100.0 / 384]
-    )
+    scaled_imgs = steps.scale(img, [1, 300.0 / 384, 200.0 / 384, 150.0 / 384, 120.0 / 384, 100.0 / 384])
 
     if not args.no_cache:
         patches, pairs = load(args.input)
