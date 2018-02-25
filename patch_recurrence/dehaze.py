@@ -53,8 +53,7 @@ def main():
 
     # Scale array must be in decreasing order
     # scaled_imgs = steps.scale(img, [1, 0.75, 0.5, 0.375, 0.3, 0.25]) -> 6 scales
-    #scaled_imgs = steps.scale(img, [1, 300.0 / 384, 200.0 / 384, 150.0 / 384, 120.0 / 384, 100.0 / 384])
-    scaled_imgs = steps.scale(img, [1])
+    scaled_imgs = steps.scale(img, [1, 300.0 / 384, 200.0 / 384, 150.0 / 384, 120.0 / 384, 100.0 / 384])
 
     if not args.no_cache:
         patches, pairs = load(args.input)
@@ -71,13 +70,13 @@ def main():
         steps.set_patch_buckets(patches, constants)
 
         logger.info("Generating pairs of patches ...")
-        pairs = steps.generate_pairs1(img, patches, constants)
+        pairs = steps.generate_pairs(scaled_imgs, patches, constants)
 
         logger.info("Removing duplicates ...")
         pairs = steps.remove_duplicates(pairs)
 
-        #logger.info("Saving patches and pairs ...")
-        #save(args.input, patches, pairs)
+        logger.info("Saving patches and pairs ...")
+        save(args.input, patches, pairs)
     else:
         logger.info("Using saved patches and pairs ...")
 

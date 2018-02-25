@@ -77,91 +77,50 @@ def set_patch_buckets(patches, constants):
         map(lambda (i,x): setattr(x, 'bucket', norm_std[k][i]), enumerate(patches[k]))
 
 
-def find_nn(patches, p, constants):
-    """Returns list of K patches which are NNs to p
-    """
+def generate_pairs(imgs, patches, constants):
     k_nearest = constants.K_NEAREST
-    patch_database = []
-    patch_database.append(
-        np.vstack([patch.norm_patch for i, patch in enumerate(patches[0]) if i != p])
-    )
-
-    candidate_database = []
-    candidate_database.append(
-        np.vstack([patch.norm_patch for i, patch in enumerate(patches[0]) if 0 <= patch.bucket <= 5])
-    )
-
-    # Form KD Tree
-    p1 = np.concatenate(candidate_database[0:])
-    kdt = KDTree(p1, leaf_size=30, metric='euclidean')
-
-    # Find NNs in KD Tree
-    t = []
-    t.append(patches[0][p].norm_patch)
-    nn = kdt.query(t, k=k_nearest, return_distance=False, sort_results=False)
-    nn_final_list = []
-    nn_final_list.append([x for x in nn[0]])
-    nn_final_list[0].append(p)
-    return nn_final_list[0]
-
-
-def generate_pairs1(img, patches, constants):
-    """
-    Choose some random patches with buckets in bucket range 6-9
-    call find_nn for each of them and append to array
-    return that array
-    """
     patch_size = constants.PATCH_SIZE
+    scaled_imgs = len(patches)
 
     patch_database = []
-    patch_database.append(
-        [patch for i, patch in enumerate(patches[0]) if 6 <= patch.bucket <= 9]
-    )
-
-    high_sd_patches = patch_database[0]
-    #top_few = random.sample(high_sd_patches, 200)
-    top_few = high_sd_patches
-
-    pairs = []
-    for p in top_few:
-        x = (p.location[0] * (img.shape[1] - patch_size)) + p.location[1]
-        nn = find_nn(patches, x, constants)
-        pairs.append(nn)
-    return pairs
-
-
-def generate_pairs(patches, constants):
-    k_nearest = constants.K_NEAREST
-    scaled_imgs = len(patches)      # only those patches with high std deviation
-    # Convert the list of patch norms into numpy arrays
-    patch_database = []
+    query_database = []
+    candidate_database = []
+    index_database = []
+    length_database = []
     for k in range(scaled_imgs):
         patch_database.append(
-            np.vstack([patch.norm_patch for patch in patches[k]])
+            np.vstack([[patch.norm_patch for patch in patches[k] if 6 <= patch.bucket <= 9]])
         )
+
+        x = [index for index,patch in enumerate(patches[k]) if 6 <= patch.bucket <= 9]
+        index_database.append([x[i] for i in range(len(x))])
+
+        length_database.append(len(x))
+
+        query_database.append(
+            np.vstack([patches[k][index_database[k][i]].norm_patch for i in range(len(x))])
+        )
+
+        candidate_database.append(
+            np.vstack([[patch.norm_patch for i, patch in enumerate(patches[k]) if 0 <= patch.bucket <= 5]])
+        )
+
+    p1 = np.concatenate(candidate_database[0:])
+    kdt = KDTree(p1, leaf_size=30, metric='euclidean')
 
     # Find list of nearest neighbours for each patch
     # `total` is used to correct indices since we successively build smaller KD trees
     nearest = []
-    total = 0
+    t = 0
     for k in range(scaled_imgs):
-        # This is done to avoid wasting time finding symmetric patches
-        p1 = np.concatenate(patch_database[k:])
-        kdt = KDTree(p1, leaf_size=30, metric='euclidean')
+        nn = kdt.query(query_database[k], k=k_nearest, return_distance=False, sort_results=False)
 
-        # k+1 taken to account for self-matches
-        k_value = min(k_nearest + 1, len(p1))
-        nn = kdt.query(patch_database[k], k=k_value, return_distance=False, sort_results=False)
+        # Append query patch index at the end of nn
+        b = np.array([[t + index_database[k][i] for i in range(length_database[k])]])
+        nn = np.concatenate((nn, b.T), axis=1)
 
-        # in the case p1 is very small, less than k
-        if k_value < k_nearest + 1:
-            extra = np.expand_dims(np.arange(nn.shape[0]), axis=1)
-            for i in range(k_nearest + 1 - k_value):
-                nn = np.concatenate((nn, extra), axis=1)
-
-        nearest.append(total + nn)
-
-        total += len(patch_database[k])
+        nearest.append(nn)
+        t += len(patches[k])
 
     return np.concatenate(nearest)
 
