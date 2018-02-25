@@ -96,13 +96,13 @@ def generate_pairs(imgs, patches, constants):
         x = [index for index, patch in enumerate(patches[k])
              if 6 <= patch.bucket <= 9
              ]
-        index_database.append([x[i] for i in range(len(x))])
+        index_database.append(x)
         length_database.append(len(x))
         candidate_database.append(
             np.vstack([[patch.norm_patch for i, patch in enumerate(patches[k]) if 0 <= patch.bucket <= 5]])
         )
 
-    p1 = np.concatenate(candidate_database[0:])
+    p1 = np.concatenate(candidate_database)
     kdt = KDTree(p1, leaf_size=30, metric='euclidean')
 
     # Find list of nearest neighbours for each patch
