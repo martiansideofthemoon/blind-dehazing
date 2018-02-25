@@ -109,7 +109,7 @@ def show_buckety_img(imgs, constants):
     plt.show()
 
 
-def histogram(pairs,i):
+def histogram(pairs, i):
     """Plotting histogram of R, G, B (ith) airlight estimates
     """
     x = []
@@ -119,17 +119,20 @@ def histogram(pairs,i):
 
     if i == 0:
         t = 'blue'
+        u = [0.2, 0.9]
     elif i == 1:
         t = 'green'
+        u = [0.3, 0.8]
     else:
         t = 'red'
+        u = [0.3, 0.9]
 
-    n, bins, patches = plt.hist(x, num_bins, facecolor=t, alpha=0.5)
+    n, bins, patches = plt.hist(x, num_bins, range=u, facecolor=t, alpha=0.5)
 
     plt.xlabel('Pairwise estimated airlight')
     plt.ylabel('Number of pairs')
     plt.title(r'$\mathrm{Histogram}$')
     plt.grid(True)
+    plt.xlim(u)
 
     plt.show()
-
