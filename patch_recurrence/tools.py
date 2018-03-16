@@ -19,6 +19,18 @@ def show_img(imgs):
     plt.show()
 
 
+def show_tmap(imgs):
+    # setup the figure
+    fig = plt.figure()
+    # show first image
+    for i, img in enumerate(imgs):
+        ax = fig.add_subplot(1, len(imgs), i + 1)
+        plt.imshow(cv2.cvtColor(np.array(np.abs(img) * 255, dtype=np.uint8), cv2.COLOR_BGR2GRAY))
+        plt.axis("off")
+    # show the images
+    plt.show()
+
+
 def show_patches(patches):
     img1 = np.copy(patches[0].img)
     patch_size = patches[0].patch_size
@@ -58,8 +70,16 @@ def set_buckets(img, patch, constants):
     num_buckets = constants.NUM_BUCKETS
     patch_size = constants.PATCH_SIZE
 
-    new_height = img.shape[0] - patch_size
-    new_width = img.shape[1] - patch_size
+    # new_height = img.shape[0] - patch_size
+    # new_width = img.shape[1] - patch_size
+
+    # For half patches
+    new_width = new_height = 0
+    for i in range(0, img.shape[0] - patch_size, 2):
+        new_height += 1
+    for i in range(0, img.shape[1] - patch_size, 2):
+        new_width += 1
+
     img = img[0:new_height, 0:new_width]
     img = np.reshape(img, [-1, 3])
 
@@ -115,24 +135,40 @@ def histogram(pairs, i):
     x = []
     for pair in pairs:
         x.append(pair.airlight[i])
-    num_bins = 100
+    num_bins = 10
+    u = [0.1, 1.0]
 
     if i == 0:
         t = 'blue'
-        u = [0.2, 0.9]
     elif i == 1:
         t = 'green'
-        u = [0.3, 0.8]
     else:
         t = 'red'
-        u = [0.3, 0.9]
 
-    n, bins, patches = plt.hist(x, num_bins, range=u, facecolor=t, alpha=0.5)
+    n, bins, patches = plt.hist(x, num_bins, facecolor=t, alpha=0.5)
 
     plt.xlabel('Pairwise estimated airlight')
     plt.ylabel('Number of pairs')
     plt.title(r'$\mathrm{Histogram}$')
     plt.grid(True)
     plt.xlim(u)
+    plt.show()
 
+def show_patches_per_bucket(patches):
+    """Plotting histogram to show number of patches in each bucket
+    """
+    scaled_imgs = len(patches)
+    num_bins = 100
+    x = []
+    for k in range(scaled_imgs):
+        for patch in patches[k]:
+            x.append(patch.bucket)
+
+    n, bins, patches = plt.hist(x, num_bins, facecolor='black', alpha=0.5)
+
+    plt.xlabel('Bucket numbers')
+    plt.ylabel('Number of patches')
+    plt.title(r'$\mathrm{Histogram}$')
+    plt.grid(True)
+    plt.xlim([0, 10])
     plt.show()

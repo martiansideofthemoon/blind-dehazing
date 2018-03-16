@@ -21,7 +21,7 @@ class Patch(object):
 
     def store(self, img, location):
         # If the patch passes std_dev test, the following vector used in KNN
-        self.norm_patch = self.mean_free_patch / self.std_dev
+        self.norm_patch = 0 if self.std_dev == 0 else self.mean_free_patch / self.std_dev
         # We want l2 norm of each vector to be 1
         self.norm_patch = self.norm_patch / np.sqrt(self.patch_size * self.patch_size * 3)
         # Used to refer to original location in future if needed
@@ -45,12 +45,14 @@ class Pair(object):
         raw2 = np.reshape(second.raw_patch, [-1, 3])
         # Equation (11) in Bahat et al.
         self.airlight = np.zeros(3)
+        np.seterr(all='raise')
         for i in range(3):
             airlight = np.dot(
                 np.transpose(air_free2[:, i] - air_free1[:, i]),
                 np.multiply(raw1[:, i], air_free2[:, i]) - np.multiply(raw2[:, i], air_free1[:, i])
             )
-            self.airlight[i] = airlight / np.sum((air_free2[:, i] - air_free1[:, i]) ** 2)
+            den = np.sum((air_free2[:, i] - air_free1[:, i]) ** 2)
+            self.airlight[i] = 0 if den == 0 else airlight / den
 
     def calculate_outlier(self):
         raw1 = np.reshape(self.first.raw_patch, [-1, 3])

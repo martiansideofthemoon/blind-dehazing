@@ -1,3 +1,4 @@
+"""Main Image Dehazing program."""
 import cPickle
 import logging
 import os
@@ -9,7 +10,11 @@ from config.arguments import parser
 
 import cv2
 
+import gc
+
 import steps
+
+import tools
 
 import yaml
 
@@ -57,8 +62,11 @@ def main():
     else:
         patches, pairs = None, None
     if patches is None and pairs is None:
-        logger.info("Extracting all patches ...")
-        patches = steps.generate_patches(scaled_imgs, constants, True)
+        logger.info("Extracting alternate patches ...")
+        patches = steps.generate_patches(scaled_imgs, constants, False)
+
+        print("\nNumber of patches extracted per scaled image")
+        print(len(patches[0]), len(patches[1]), len(patches[2]), len(patches[3]), len(patches[4]), len(patches[5]))
 
         logger.info("Smoothening std deviations of patches ...")
         steps.smoothen(scaled_imgs, patches, constants)
@@ -67,7 +75,10 @@ def main():
         steps.set_patch_buckets(patches, constants)
 
         logger.info("Generating pairs of patches ...")
-        pairs = steps.generate_pairs(scaled_imgs, patches, constants)
+        pairs = steps.generate_pairs(patches, constants)
+
+        print("\nNumber of pairs generated using generate_pairs")
+        print(len(pairs))
 
         # logger.info("Saving patches and pairs ...")
         # save(args.input, patches, pairs)
@@ -77,13 +88,34 @@ def main():
     logger.info("Filtering pairs for checking normalized correlation ...")
     pairs = steps.filter_pairs(patches, pairs, constants)
 
+    print("\nNumber of pairs retained after filtering")
+    print(len(pairs))
+
     logger.info("Removing outliers ...")
     pairs = steps.remove_outliers(pairs, constants)
+
+    print("\nNumber of pairs retained after removing outliers")
+    print(len(pairs))
 
     logger.info("Estimating global airlight ...")
     airlight = steps.estimate_airlight(pairs)
 
     logger.info("Estimated airlight is ...%s", str(airlight))
+
+    # T-map estimation code begins
+
+    del pairs
+    del patches
+    gc.collect()
+
+    logger.info("Extracting ALL patches ...")
+    patches = steps.generate_patches([img], constants, True)
+
+    logger.info("Estimating t-map ...")
+    dehazed = steps.estimate_tmap(img, patches[0], airlight, constants)
+
+    logger.info("Displaying dehazed output image ...")
+    tools.show_img([img, dehazed])
 
 if __name__ == '__main__':
     main()
