@@ -45,7 +45,6 @@ class Pair(object):
         raw2 = np.reshape(second.raw_patch, [-1, 3])
         # Equation (11) in Bahat et al.
         self.airlight = np.zeros(3)
-        np.seterr(all='raise')
         for i in range(3):
             airlight = np.dot(
                 np.transpose(air_free2[:, i] - air_free1[:, i]),

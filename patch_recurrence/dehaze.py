@@ -13,6 +13,7 @@ import cv2
 import gc
 
 import steps
+import tmap_steps
 
 import tools
 
@@ -66,7 +67,7 @@ def main():
         patches = steps.generate_patches(scaled_imgs, constants, False)
 
         print("\nNumber of patches extracted per scaled image")
-        print(len(patches[0]), len(patches[1]), len(patches[2]), len(patches[3]), len(patches[4]), len(patches[5]))
+        print(map(len, patches))
 
         logger.info("Smoothening std deviations of patches ...")
         steps.smoothen(scaled_imgs, patches, constants)
@@ -112,7 +113,7 @@ def main():
     patches = steps.generate_patches([img], constants, True)
 
     logger.info("Estimating t-map ...")
-    dehazed = steps.estimate_tmap(img, patches[0], airlight, constants)
+    dehazed = tmap_steps.estimate_tmap(img, patches[0], airlight, constants)
 
     logger.info("Displaying dehazed output image ...")
     tools.show_img([img, dehazed])

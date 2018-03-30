@@ -5,21 +5,11 @@ import numpy as np
 
 from patch import Pair, Patch
 
-import math
-
 from scipy import spatial
 
 from sklearn.neighbors.kd_tree import KDTree
 
-from decimal import Decimal
-import torch
-from torch.nn.parameter import Parameter
-from torch.autograd import Variable
-import torch.nn.functional as F
-
 import sys
-
-import tools
 
 import logging
 
@@ -91,11 +81,8 @@ def set_patch_buckets(patches, constants):
     scaled_imgs = len(patches)
 
     for k in range(scaled_imgs):
-        std_database = []
-        patch_database = []
-        for patch in patches[k]:
-            std_database.append(patch.std_dev)
-            patch_database.append(0)
+        patch_database = [0] * len(patches[k])
+        std_database = [patch.std_dev for patch in patches[k]]
 
         index = np.argsort(std_database)
         interval = len(std_database) / num_buckets
@@ -111,6 +98,7 @@ def set_patch_buckets(patches, constants):
 
 def generate_pairs(patches, constants):
     k_nearest = constants.K_NEAREST
+    num_patches = constants.NUM_QUERY_PATCHES
     scaled_imgs = len(patches)
 
     pairs = []
@@ -119,24 +107,25 @@ def generate_pairs(patches, constants):
     index_database = []
     length_database = []
     for k in range(scaled_imgs):
-        a = [patch.norm_patch for patch in patches[k] if 7 <= patch.bucket <= 9]
-        x = [index for index, patch in enumerate(patches[k]) if 7 <= patch.bucket <= 9]
+        qp = [patch.norm_patch for patch in patches[k] if 7 <= patch.bucket <= 9]
+        qi = [index for index, patch in enumerate(patches[k]) if 7 <= patch.bucket <= 9]
 
-        if len(x) > 20:
+        # Choose lesser query patches through random selection to improve speed
+        if len(qi) > num_patches:
             np.random.seed(0)
-            t = np.random.choice(np.arange(len(x)), 20, replace=False).tolist()
-            t.sort()
-            a_sample = [a[i] for i in t]
-            x_sample = [x[i] for i in t]
+            selection = np.random.choice(np.arange(len(qi)), num_patches, replace=False).tolist()
+            selection.sort()
+            query_patches = [qp[i] for i in selection]
+            query_indices = [qi[i] for i in selection]
         else:
-            a_sample = a
-            x_sample = x
+            query_patches = qp
+            query_indices = qi
 
         query_database.append(
-            np.vstack([a_sample])
+            np.vstack([query_patches])
         )
-        index_database.append(x_sample)
-        length_database.append(len(x_sample))
+        index_database.append(query_indices)
+        length_database.append(len(query_indices))
         candidate_database.append(
             np.vstack([[patch.norm_patch for i, patch in enumerate(patches[k]) if 0 <= patch.bucket <= 5]])
         )
@@ -202,101 +191,3 @@ def estimate_airlight(pairs):
         numerator += pair.weight * pair.airlight
         denominator += pair.weight
     return (numerator / denominator)
-
-
-# Tmap estimation functions
-
-def sigmoid(y):
-    """Returns sigmoid value of pixel x
-    """
-    l2_norm = math.sqrt(sum(map(lambda x: x * x, y)))
-    res = 1 / 1 + Decimal(48 * (l2_norm - 0.1)).exp()
-    return res
-
-
-def get_norm(x):
-    height, width = x.size(0), x.size(1)
-    log = torch.log(x)
-
-    log = log.view(1, 1, height, width)
-    diff1 = torch.Tensor([-1, 0, 1])
-    diff1 = Variable(diff1.view(1, 1, 1, 3), requires_grad=True)
-    diff2 = torch.Tensor([1, 0, -1])
-    diff2 = Variable(diff2.view(1, 1, 3, 1), requires_grad=True)
-
-    # conv1 and conv2 should contain the x and y components resp, of grad(log)
-    conv1 = F.conv2d(log, diff1, padding=(0, 1))
-    conv2 = F.conv2d(log, diff2, padding=(1, 0))
-
-    l2_norm = torch.mul(conv1, conv1) + torch.mul(conv2, conv2)
-    l2_norm.data.resize_(height * width)
-    return l2_norm
-
-
-def loss_fun(x, sig):
-    l2_norm = get_norm(x)
-    sig2 = np.asarray(sig, dtype=np.float32)
-    sig1 = torch.from_numpy(sig2)
-    t = torch.mul(l2_norm.data, sig1)
-    ret = Variable(torch.FloatTensor([torch.sum(t)]), requires_grad=True)
-    return ret
-
-
-def minimization(sig, tlb):
-    """Returns new t-map
-    """
-    t_height, t_width = len(tlb), len(tlb[0])
-    tlb = torch.FloatTensor(np.reshape(tlb, [t_height, t_width]))
-    for i in range(t_height):
-        for j in range(t_width):
-            if tlb[i][j] <= 0:
-                tlb[i][j] = 10 ** -7
-
-    weight = Parameter(torch.Tensor(t_height, t_width), requires_grad=True)
-    weight.data = tlb
-
-    optimizer = torch.optim.SGD([weight], lr=0.1)
-    loss = loss_fun(weight, sig)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    t = weight.data
-    return t
-
-
-def estimate_tmap(img, patches, airlight, constants):
-    """Estimates t-map and returns dehazed output image after 20 iterations
-    """
-    patch_size = constants.PATCH_SIZE
-    tlb = np.empty([len(patches)])
-    for index, patch in enumerate(patches):
-        raw = np.reshape(patch.raw_patch, [-1, 3])
-        temp = 1 - raw / airlight
-        tlb[index] = max(temp[patch_size ** 2 // 2])
-    h, w = img.shape[0], img.shape[1]
-    tlb = np.reshape(tlb, [h - patch_size, w - patch_size, 1])
-    img = img[0:h - patch_size, 0:w - patch_size]
-    img = np.reshape(img, [h - patch_size, w - patch_size, 3])
-    l_img = (img - airlight) / tlb + airlight
-
-    # Sigmoid calculation
-    grad = np.empty([3, len(l_img) * len(l_img[0])])
-    l_img = np.reshape(l_img, [3, -1])
-    grad[0] = np.gradient(l_img[0])
-    grad[1] = np.gradient(l_img[1])
-    grad[2] = np.gradient(l_img[2])
-    grad = np.reshape(grad, [-1, 3])
-    l_img = np.reshape(l_img, [-1, 3])
-    sig = torch.Tensor([float(sigmoid(grad[i])) for i in range(len(l_img))])
-
-    # Run through 10 iterations
-    t_prev = tlb
-    for i in range(1):
-        t_curr = minimization(sig, t_prev)
-        t_curr = t_curr.numpy()
-        t_curr = np.reshape(t_curr, [h - patch_size, w - patch_size, 1])
-        l_img = (img - airlight) / t_curr + airlight
-        t_prev = t_curr
-        tools.show_img([img, l_img])
-
-    return l_img
