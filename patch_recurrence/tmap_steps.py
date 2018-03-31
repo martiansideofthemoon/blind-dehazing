@@ -7,8 +7,6 @@ from decimal import Decimal
 
 import torch
 
-from torch.nn.parameter import Parameter
-
 from torch.autograd import Variable
 
 import torch.nn.functional as F
@@ -26,13 +24,13 @@ def sigmoid(y):
 
 def get_norm(x):
     height, width = x.size(0), x.size(1)
-    log = torch.log(x)
 
+    log = torch.log(x)
     log = log.view(1, 1, height, width)
     diff1 = torch.Tensor([-1, 0, 1])
-    diff1 = Variable(diff1.view(1, 1, 1, 3), requires_grad=True)
+    diff1 = Variable(diff1.view(1, 1, 1, 3), requires_grad=False)
     diff2 = torch.Tensor([1, 0, -1])
-    diff2 = Variable(diff2.view(1, 1, 3, 1), requires_grad=True)
+    diff2 = Variable(diff2.view(1, 1, 3, 1), requires_grad=False)
 
     # conv1 and conv2 should contain the x and y components resp, of grad(log)
     conv1 = F.conv2d(log, diff1, padding=(0, 1))
@@ -43,18 +41,18 @@ def get_norm(x):
     return l2_norm
 
 
-def loss_fun(x, sig):
+def loss_fun(w, sig):
     """Equation (26)"""
-    l2_norm = get_norm(x)
-    sig2 = np.asarray(sig, dtype=np.float32)
-    sig1 = torch.from_numpy(sig2)
-    t = torch.mul(l2_norm.data, sig1)
-    ret = Variable(torch.FloatTensor([torch.sum(t)]), requires_grad=True)
+    l2_norm = get_norm(w)
+    s = l2_norm * sig
+    ret = Variable(torch.FloatTensor([torch.sum(s.data)]), requires_grad=True)
     return ret
 
 
 def minimization(sig, tlb):
     """Returns new t-map
+    Initialize tmap with tlb
+    sig is a constant for the optimization step
     """
     t_height, t_width = len(tlb), len(tlb[0])
     tlb = torch.FloatTensor(np.reshape(tlb, [t_height, t_width]))
@@ -63,15 +61,18 @@ def minimization(sig, tlb):
             if tlb[i][j] <= 0:
                 tlb[i][j] = 10 ** -7
 
-    weight = Parameter(torch.Tensor(t_height, t_width), requires_grad=True)
-    weight.data = tlb
+    weight = Variable(tlb, requires_grad=True)
+    sig = Variable(sig, requires_grad=False)
 
-    optimizer = torch.optim.SGD([weight], lr=100)
-    loss = loss_fun(weight, sig)
+    optimizer = torch.optim.SGD([weight], lr=10)
     optimizer.zero_grad()
+    loss = loss_fun(weight, sig)
+    print "Loss is ", loss
     loss.backward()
     optimizer.step()
     t = weight.data
+
+    print "Are t-maps same - ", torch.equal(tlb, t)
     return t
 
 
@@ -91,18 +92,19 @@ def estimate_tmap(img, patches, airlight, constants):
     img = np.reshape(img[0:h - patch_size, 0:w - patch_size], [h - patch_size, w - patch_size, 3])
     l_img = (img - airlight) / tlb + airlight
 
-    # Sigmoid calculation
+    tools.show_img([img, l_img])
+
+    # Initial Sigmoid calculation
     grad = np.empty([3, l_img.shape[0] * l_img.shape[1]])
     l_img = np.reshape(l_img, [3, -1])
-    grad[0] = np.gradient(l_img[0])
-    grad[1] = np.gradient(l_img[1])
-    grad[2] = np.gradient(l_img[2])
+    grad = [np.gradient(l_img[i]) for i in range(3)]
     grad = np.reshape(grad, [-1, 3])
     l_img = np.reshape(l_img, [-1, 3])
     sig = torch.Tensor([float(sigmoid(grad[i])) for i in range(len(l_img))])
 
     # Run through 10 iterations
     t_prev = tlb
+    new_grad = np.empty([3, l_img.shape[0] * l_img.shape[1]])
     for i in range(10):
         t_curr = minimization(sig, t_prev)
         t_curr = t_curr.numpy()
@@ -111,4 +113,12 @@ def estimate_tmap(img, patches, airlight, constants):
         t_prev = t_curr
         tools.show_img([img, l_img])
 
+        # Recalculation of sigmoid
+        l_img = np.reshape(l_img, [3, -1])
+        new_grad = [np.gradient(l_img[i]) for i in range(3)]
+        grad = np.reshape(new_grad, [-1, 3])
+        l_img = np.reshape(l_img, [-1, 3])
+        sig = torch.Tensor([float(sigmoid(grad[i])) for i in range(len(l_img))])
+
+    l_img = np.reshape(l_img, [h - patch_size, w - patch_size, 3])
     return l_img
