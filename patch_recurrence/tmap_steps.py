@@ -37,7 +37,7 @@ def get_norm(x):
     conv2 = F.conv2d(log, diff2, padding=(1, 0))
 
     l2_norm = torch.mul(conv1, conv1) + torch.mul(conv2, conv2)
-    l2_norm.data.resize_(height * width)
+    l2_norm.view(height * width)
     return l2_norm
 
 
@@ -45,7 +45,7 @@ def loss_fun(w, sig):
     """Equation (26)"""
     l2_norm = get_norm(w)
     s = l2_norm * sig
-    ret = Variable(torch.FloatTensor([torch.sum(s.data)]), requires_grad=True)
+    ret = torch.sum(s)
     return ret
 
 
@@ -71,8 +71,6 @@ def minimization(sig, tlb):
     loss.backward()
     optimizer.step()
     t = weight.data
-
-    print "Are t-maps same - ", torch.equal(tlb, t)
     return t
 
 
@@ -101,6 +99,7 @@ def estimate_tmap(img, patches, airlight, constants):
     grad = np.reshape(grad, [-1, 3])
     l_img = np.reshape(l_img, [-1, 3])
     sig = torch.Tensor([float(sigmoid(grad[i])) for i in range(len(l_img))])
+    sig = sig.view(h - patch_size, w - patch_size)
 
     # Run through 10 iterations
     t_prev = tlb
@@ -119,6 +118,7 @@ def estimate_tmap(img, patches, airlight, constants):
         grad = np.reshape(new_grad, [-1, 3])
         l_img = np.reshape(l_img, [-1, 3])
         sig = torch.Tensor([float(sigmoid(grad[i])) for i in range(len(l_img))])
+        sig = sig.view(h - patch_size, w - patch_size)
 
     l_img = np.reshape(l_img, [h - patch_size, w - patch_size, 3])
     return l_img
