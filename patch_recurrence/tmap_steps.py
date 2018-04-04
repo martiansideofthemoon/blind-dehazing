@@ -5,6 +5,10 @@ import math
 
 from decimal import Decimal
 
+import sys
+
+import logging
+
 import torch
 
 from torch.autograd import Variable
@@ -12,6 +16,13 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 import tools
+
+logging.basicConfig(
+    stream=sys.stdout,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 
 def sigmoid(y):
@@ -49,7 +60,7 @@ def loss_fun(w, sig):
     return ret
 
 
-def minimization(sig, tlb):
+def minimization(sig, tlb, rate):
     """Returns new t-map
     Initialize tmap with tlb
     sig is a constant for the optimization step
@@ -64,14 +75,20 @@ def minimization(sig, tlb):
     weight = Variable(tlb, requires_grad=True)
     sig = Variable(sig, requires_grad=False)
 
-    optimizer = torch.optim.SGD([weight], lr=10)
+    optimizer = torch.optim.SGD([weight], lr=rate)
     optimizer.zero_grad()
-    loss = loss_fun(weight, sig)
-    print "Loss is ", loss
+    loss_val = loss = loss_fun(weight, sig)
+    logger.info("Loss is %f. Rate is %f", loss, rate)
     loss.backward()
     optimizer.step()
     t = weight.data
-    return t
+
+    count = 0
+    for i in range(len(t)):
+        for j in range(len(t[0])):
+            if t[i][j] > 1 or t[i][j] < 0:
+                count += 1
+    return t, loss_val
 
 
 def estimate_tmap(img, patches, airlight, constants):
@@ -90,6 +107,7 @@ def estimate_tmap(img, patches, airlight, constants):
     img = np.reshape(img[0:h - patch_size, 0:w - patch_size], [h - patch_size, w - patch_size, 3])
     l_img = (img - airlight) / tlb + airlight
 
+    tools.show_tmap([tlb])
     tools.show_img([img, l_img])
 
     # Initial Sigmoid calculation
@@ -101,16 +119,19 @@ def estimate_tmap(img, patches, airlight, constants):
     sig = torch.Tensor([float(sigmoid(grad[i])) for i in range(len(l_img))])
     sig = sig.view(h - patch_size, w - patch_size)
 
-    # Run through 10 iterations
+    # Run through 100 iterations
     t_prev = tlb
     new_grad = np.empty([3, l_img.shape[0] * l_img.shape[1]])
-    for i in range(10):
-        t_curr = minimization(sig, t_prev)
+
+    rate = 0.001
+    loss_list = []
+    for i in range(100):
+        t_curr, curr_loss = minimization(sig, t_prev, rate)
+        loss_list.append(curr_loss.data[0])
         t_curr = t_curr.numpy()
         t_curr = np.reshape(t_curr, [h - patch_size, w - patch_size, 1])
         l_img = (img - airlight) / t_curr + airlight
         t_prev = t_curr
-        tools.show_img([img, l_img])
 
         # Recalculation of sigmoid
         l_img = np.reshape(l_img, [3, -1])
@@ -120,5 +141,7 @@ def estimate_tmap(img, patches, airlight, constants):
         sig = torch.Tensor([float(sigmoid(grad[i])) for i in range(len(l_img))])
         sig = sig.view(h - patch_size, w - patch_size)
 
+    tools.show_loss(loss_list, 100, 'Optimization Algo')
+    tools.show_tmap([t_prev])
     l_img = np.reshape(l_img, [h - patch_size, w - patch_size, 3])
     return l_img

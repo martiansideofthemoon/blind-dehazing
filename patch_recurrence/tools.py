@@ -22,20 +22,10 @@ def show_img(imgs):
 def show_tmap(imgs):
     # setup the figure
     fig = plt.figure()
-
-    normal = cv2.COLOR_BGR2RGB
-    tmap = cv2.COLOR_BGR2GRAY
-
-    # show first image
     for i, img in enumerate(imgs):
-        if i == 0:
-            x = normal
-        else:
-            x = tmap
         ax = fig.add_subplot(1, len(imgs), i + 1)
-        plt.imshow(cv2.cvtColor(np.array(np.abs(img) * 255, dtype=np.uint8), x))
+        plt.imshow(cv2.cvtColor(np.array(np.abs(img) * 255, dtype=np.uint8), cv2.COLOR_GRAY2RGB))
         plt.axis("off")
-    # show the images
     plt.show()
 
 
@@ -179,4 +169,18 @@ def show_patches_per_bucket(patches):
     plt.title(r'$\mathrm{Histogram}$')
     plt.grid(True)
     plt.xlim([0, 10])
+    plt.show()
+
+
+def show_loss(loss, iterations, name):
+    """Display loss across each iteration
+    """
+    index = [i for i in range(iterations)]
+
+    plt.plot(index, loss, 'ro')
+    plt.axis([0, 100, 1000, 7000])
+    plt.xlabel('Iterations')
+    plt.ylabel('Loss')
+    plt.title(name)
+    plt.grid(True)
     plt.show()
