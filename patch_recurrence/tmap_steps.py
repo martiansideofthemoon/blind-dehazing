@@ -24,13 +24,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# dtype = torch.FloatTensor
+dtype = torch.cuda.FloatTensor  # Uncomment this to run on GPU
 
-def sigmoid(y):
+
+def sigmoid(y, length):
     """Returns sigmoid value of pixel x
     """
-    l2_norm = math.sqrt(sum(map(lambda x: x * x, y)))
-    res = 1 / (1 + Decimal(48 * (l2_norm - 0.1)).exp())
-    return res
+    sig = torch.Tensor(length).type(dtype).zero_()
+    for i in range(length):
+        l2_norm = math.sqrt(sum(map(lambda x: x * x, y[i])))
+        res = 1 / (1 + Decimal(48 * (l2_norm - 0.1)).exp())
+        sig[i] = float(res)
+    return sig
 
 
 def get_norm(x):
@@ -38,9 +44,9 @@ def get_norm(x):
 
     log = torch.log(x)
     log = log.view(1, 1, height, width)
-    diff1 = torch.Tensor([-1, 0, 1])
+    diff1 = torch.Tensor([-1, 0, 1]).type(dtype)
     diff1 = Variable(diff1.view(1, 1, 1, 3), requires_grad=False)
-    diff2 = torch.Tensor([1, 0, -1])
+    diff2 = torch.Tensor([1, 0, -1]).type(dtype)
     diff2 = Variable(diff2.view(1, 1, 3, 1), requires_grad=False)
 
     # conv1 and conv2 should contain the x and y components resp, of grad(log)
@@ -66,7 +72,7 @@ def minimization(sig, tlb, rate):
     sig is a constant for the optimization step
     """
     t_height, t_width = len(tlb), len(tlb[0])
-    tlb = torch.FloatTensor(np.reshape(tlb, [t_height, t_width]))
+    tlb = torch.Tensor(np.reshape(tlb, [t_height, t_width])).type(dtype)
     for i in range(t_height):
         for j in range(t_width):
             if tlb[i][j] <= 0:
@@ -82,12 +88,6 @@ def minimization(sig, tlb, rate):
     loss.backward()
     optimizer.step()
     t = weight.data
-
-    count = 0
-    for i in range(len(t)):
-        for j in range(len(t[0])):
-            if t[i][j] > 1 or t[i][j] < 0:
-                count += 1
     return t, loss_val
 
 
@@ -97,7 +97,7 @@ def estimate_tmap(img, patches, airlight, constants):
     patch_size = constants.PATCH_SIZE
     h, w = img.shape[0], img.shape[1]
 
-    # Initializing lower bounded transmission map tlb
+    # Initializing lower bounded transmission map tlb - equn(15)
     tlb = np.empty([len(patches)])
     for index, patch in enumerate(patches):
         raw = np.reshape(patch.raw_patch, [-1, 3])
@@ -111,12 +111,11 @@ def estimate_tmap(img, patches, airlight, constants):
     tools.show_img([img, l_img])
 
     # Initial Sigmoid calculation
-    grad = np.empty([3, l_img.shape[0] * l_img.shape[1]])
     l_img = np.reshape(l_img, [3, -1])
     grad = [np.gradient(l_img[i]) for i in range(3)]
     grad = np.reshape(grad, [-1, 3])
     l_img = np.reshape(l_img, [-1, 3])
-    sig = torch.Tensor([float(sigmoid(grad[i])) for i in range(len(l_img))])
+    sig = sigmoid(torch.from_numpy(grad), len(l_img))
     sig = sig.view(h - patch_size, w - patch_size)
 
     # Run through 100 iterations
@@ -138,10 +137,10 @@ def estimate_tmap(img, patches, airlight, constants):
         new_grad = [np.gradient(l_img[i]) for i in range(3)]
         grad = np.reshape(new_grad, [-1, 3])
         l_img = np.reshape(l_img, [-1, 3])
-        sig = torch.Tensor([float(sigmoid(grad[i])) for i in range(len(l_img))])
+        sig = sigmoid(grad, len(l_img))
         sig = sig.view(h - patch_size, w - patch_size)
 
-    tools.show_loss(loss_list, 100, 'Optimization Algo')
+    tools.show_loss(loss_list, 100, 'SGD Optimization Algo')
     tools.show_tmap([t_prev])
     l_img = np.reshape(l_img, [h - patch_size, w - patch_size, 3])
     return l_img
