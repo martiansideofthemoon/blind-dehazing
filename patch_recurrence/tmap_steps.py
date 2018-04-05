@@ -17,8 +17,6 @@ import torch.nn as nn
 
 import torch.nn.functional as F
 
-import tools
-
 logging.basicConfig(
     stream=sys.stdout,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -26,110 +24,93 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-dtype = torch.cuda.FloatTensor
+dtype = torch.cuda.FloatTensor  # Uncomment this to run on GPU
+
+
+def gradient(x):
+    """Returns x and y components of grad(x)."""
+    diff1 = torch.Tensor([-1, 0, 1]).type(dtype)
+    diff1 = Variable(diff1.view(1, 1, 1, 3), requires_grad=False)
+    diff2 = torch.Tensor([1, 0, -1]).type(dtype)
+    diff2 = Variable(diff2.view(1, 1, 3, 1), requires_grad=False)
+    conv1 = F.conv2d(x, diff1, padding=(0, 1))
+    conv2 = F.conv2d(x, diff2, padding=(1, 0))
+    return conv1, conv2
+
+
+def w_val(l_img):
+    l_img = torch.mean(l_img, 2)
+    height, width = l_img.size(0), l_img.size(1)
+    l_img = Variable(l_img.view(1, 1, height, width), requires_grad=False)
+    conv1, conv2 = gradient(l_img)
+    raised = (0.1 - torch.sqrt(torch.mul(conv1, conv1) + torch.mul(conv2, conv2))) * 48
+    return torch.sigmoid(raised)
+
 
 class Net(nn.Module):
-    def __init__(self, img, patches, airlight, constants):
+    def __init__(self, img, patches, airlight, tlb, constants):
         super(Net, self).__init__()
         self.img = img
         self.patches = patches
         self.airlight = airlight
         self.constants = constants
-
-    def sigmoid(self, y, length):
-        sig = torch.Tensor(length).type(dtype).zero_()
-        for i in range(length):
-            l2_norm = math.sqrt(sum(map(lambda x: x * x, y[i])))
-            res = 1 / (1 + Decimal(48 * (l2_norm - 0.1)).exp())
-            sig[i] = float(res)
-        return sig
+        self.tmap = Variable(tlb, requires_grad=True)
 
     def get_norm(self, x):
         height, width = x.size(0), x.size(1)
-
         log = torch.log(x)
         log = log.view(1, 1, height, width)
-        diff1 = torch.Tensor([-1, 0, 1]).type(dtype)
-        diff1 = Variable(diff1.view(1, 1, 1, 3), requires_grad=False)
-        diff2 = torch.Tensor([1, 0, -1]).type(dtype)
-        diff2 = Variable(diff2.view(1, 1, 3, 1), requires_grad=False)
-
-        # conv1 and conv2 should contain the x and y components resp, of grad(log)
-        conv1 = F.conv2d(log, diff1, padding=(0, 1))
-        conv2 = F.conv2d(log, diff2, padding=(1, 0))
-
+        conv1, conv2 = gradient(log)
         l2_norm = torch.mul(conv1, conv1) + torch.mul(conv2, conv2)
         l2_norm.view(height * width)
         return l2_norm
 
-    def forward(self, w, sig):
+    def forward(self, l_img):
         """Equation (26)"""
-        l2_norm = self.get_norm(w)
+        tmap = self.tmap
+        l2_norm = self.get_norm(tmap)
+        sig = w_val(l_img)
         s = l2_norm * sig
-        ret = torch.sum(s)
-        return ret
+        return torch.sum(s)
 
 
 def estimate_tmap(img, patches, airlight, constants):
     """Estimates t-map and returns dehazed output image after 20 iterations
     """
-    net = Net(img, patches, airlight, constants)
-    net.cuda()
-
     patch_size = constants.PATCH_SIZE
     h, w = img.shape[0], img.shape[1]
 
-    # Initializing lower bounded transmission map tlb - equn(15)
+    # Intialize tmap as tlb
     tlb = np.empty([len(patches)])
     for index, patch in enumerate(patches):
         raw = np.reshape(patch.raw_patch, [-1, 3])
         tlb_patch = 1 - raw / airlight
         tlb[index] = max(tlb_patch[patch_size ** 2 // 2])
     tlb = np.reshape(tlb, [h - patch_size, w - patch_size, 1])
+    for i in range(h - patch_size):
+        for j in range(w - patch_size):
+            if tlb[i][j][0] <= 0:
+                tlb[i][j][0] = 10 ** -7
+
     img = np.reshape(img[0:h - patch_size, 0:w - patch_size], [h - patch_size, w - patch_size, 3])
     l_img = (img - airlight) / tlb + airlight
 
-    # Initial Sigmoid calculation
-    l_img = np.reshape(l_img, [3, -1])
-    grad = [np.gradient(l_img[i]) for i in range(3)]
-    grad = np.reshape(grad, [-1, 3])
-    l_img = np.reshape(l_img, [-1, 3])
-    sig = net.sigmoid(torch.from_numpy(grad), len(l_img))
-    sig = sig.view(h - patch_size, w - patch_size)
+    # Define the Network
+    net = Net(img, patches, airlight, torch.from_numpy(tlb).type(dtype), constants)
+    net.cuda()
 
     # Actual Optimization
-    t_height, t_width = len(tlb), len(tlb[0])
-    tlb = torch.Tensor(np.reshape(tlb, [t_height, t_width])).type(dtype)
-    for i in range(t_height):
-        for j in range(t_width):
-            if tlb[i][j] <= 0:
-                tlb[i][j] = 10 ** -7
-    weight = Variable(tlb, requires_grad=True)
-    sig = Variable(sig, requires_grad=False)
-    optimizer = torch.optim.SGD([weight], lr=0.001)
-    for i in range(100):
+    optimizer = torch.optim.SGD([net.tmap], lr=0.001)
+    for i in range(5):
         optimizer.zero_grad()
-        loss = net(weight, sig)
+        loss = net(torch.from_numpy(l_img).type(dtype))
         logger.info("Loss is %f", loss)
         loss.backward()
         optimizer.step()
-        tmap = weight.data
-        # Recalculate sig and weight based on tmap
-        weight = Variable(tmap, requires_grad=True)
+        tmap = net.tmap.data
         tmap = tmap.cpu().numpy()
         tmap = np.reshape(tmap, [h - patch_size, w - patch_size, 1])
         l_img = (img - airlight) / tmap + airlight
-        l_img = np.reshape(l_img, [3, -1])
-        grad = [np.gradient(l_img[i]) for i in range(3)]
-        grad = np.reshape(grad, [-1, 3])
-        l_img = np.reshape(l_img, [-1, 3])
-        sig = net.sigmoid(torch.from_numpy(grad), len(l_img))
-        sig = sig.view(h - patch_size, w - patch_size)
-        sig = Variable(sig, requires_grad=False)
-
-    tmap = tmap.cpu().numpy()
-    tmap = np.reshape(tmap, [h - patch_size, w - patch_size, 1])
-    l_img = (img - airlight) / tmap + airlight
 
     l_img = np.reshape(l_img, [h - patch_size, w - patch_size, 3])
     return l_img
