@@ -26,8 +26,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# dtype = torch.FloatTensor
-dtype = torch.cuda.FloatTensor  # Uncomment this to run on GPU
+dtype = torch.cuda.FloatTensor
 
 class Net(nn.Module):
     def __init__(self, img, patches, airlight, constants):
@@ -63,85 +62,12 @@ class Net(nn.Module):
         l2_norm.view(height * width)
         return l2_norm
 
-    def loss_fun(self, w, sig):
+    def forward(self, w, sig):
         """Equation (26)"""
         l2_norm = self.get_norm(w)
         s = l2_norm * sig
         ret = torch.sum(s)
         return ret
-
-    def minimization(self, sig, tlb, rate):
-        """Returns new t-map
-        Initialize tmap with tlb
-        sig is a constant for the optimization step
-        """
-        t_height, t_width = len(tlb), len(tlb[0])
-        tlb = torch.Tensor(np.reshape(tlb, [t_height, t_width])).type(dtype)
-        for i in range(t_height):
-            for j in range(t_width):
-                if tlb[i][j] <= 0:
-                    tlb[i][j] = 10 ** -7
-
-        weight = Variable(tlb, requires_grad=True)
-        sig = Variable(sig, requires_grad=False)
-
-        optimizer = torch.optim.SGD([weight], lr=rate)
-        optimizer.zero_grad()
-        loss_val = loss = self.loss_fun(weight, sig)
-        logger.info("Loss is %f. Rate is %f", loss, rate)
-        loss.backward()
-        optimizer.step()
-        t = weight.data
-        return t, loss_val
-
-    def forward(self):
-        patch_size = self.constants.PATCH_SIZE
-        h, w = self.img.shape[0], self.img.shape[1]
-
-        # Initializing lower bounded transmission map tlb - equn(15)
-        tlb = np.empty([len(self.patches)])
-        for index, patch in enumerate(self.patches):
-            raw = np.reshape(patch.raw_patch, [-1, 3])
-            tlb_patch = 1 - raw / self.airlight
-            tlb[index] = max(tlb_patch[patch_size ** 2 // 2])
-        tlb = np.reshape(tlb, [h - patch_size, w - patch_size, 1])
-        img = np.reshape(self.img[0:h - patch_size, 0:w - patch_size], [h - patch_size, w - patch_size, 3])
-        l_img = (img - self.airlight) / tlb + self.airlight
-
-        # Initial Sigmoid calculation
-        l_img = np.reshape(l_img, [3, -1])
-        grad = [np.gradient(l_img[i]) for i in range(3)]
-        grad = np.reshape(grad, [-1, 3])
-        l_img = np.reshape(l_img, [-1, 3])
-        sig = self.sigmoid(torch.from_numpy(grad), len(l_img))
-        sig = sig.view(h - patch_size, w - patch_size)
-
-        # Run through 100 iterations
-        t_prev = tlb
-        new_grad = np.empty([3, l_img.shape[0] * l_img.shape[1]])
-
-        rate = 0.001
-        loss_list = []
-        for i in range(100):
-            t_curr, curr_loss = self.minimization(sig, t_prev, rate)
-            loss_list.append(curr_loss.data[0])
-            t_curr = t_curr.cpu().numpy()
-            t_curr = np.reshape(t_curr, [h - patch_size, w - patch_size, 1])
-            l_img = (img - self.airlight) / t_curr + self.airlight
-            t_prev = t_curr
-
-            # Recalculation of sigmoid
-            l_img = np.reshape(l_img, [3, -1])
-            new_grad = [np.gradient(l_img[i]) for i in range(3)]
-            grad = np.reshape(new_grad, [-1, 3])
-            l_img = np.reshape(l_img, [-1, 3])
-            sig = self.sigmoid(grad, len(l_img))
-            sig = sig.view(h - patch_size, w - patch_size)
-
-        # tools.show_loss(loss_list, 100, 'SGD Optimization Algo')
-        # tools.show_tmap([t_prev])
-        l_img = np.reshape(l_img, [h - patch_size, w - patch_size, 3])
-        return l_img
 
 
 def estimate_tmap(img, patches, airlight, constants):
@@ -149,5 +75,61 @@ def estimate_tmap(img, patches, airlight, constants):
     """
     net = Net(img, patches, airlight, constants)
     net.cuda()
-    res = net()
-    return res
+
+    patch_size = constants.PATCH_SIZE
+    h, w = img.shape[0], img.shape[1]
+
+    # Initializing lower bounded transmission map tlb - equn(15)
+    tlb = np.empty([len(patches)])
+    for index, patch in enumerate(patches):
+        raw = np.reshape(patch.raw_patch, [-1, 3])
+        tlb_patch = 1 - raw / airlight
+        tlb[index] = max(tlb_patch[patch_size ** 2 // 2])
+    tlb = np.reshape(tlb, [h - patch_size, w - patch_size, 1])
+    img = np.reshape(img[0:h - patch_size, 0:w - patch_size], [h - patch_size, w - patch_size, 3])
+    l_img = (img - airlight) / tlb + airlight
+
+    # Initial Sigmoid calculation
+    l_img = np.reshape(l_img, [3, -1])
+    grad = [np.gradient(l_img[i]) for i in range(3)]
+    grad = np.reshape(grad, [-1, 3])
+    l_img = np.reshape(l_img, [-1, 3])
+    sig = net.sigmoid(torch.from_numpy(grad), len(l_img))
+    sig = sig.view(h - patch_size, w - patch_size)
+
+    # Actual Optimization
+    t_height, t_width = len(tlb), len(tlb[0])
+    tlb = torch.Tensor(np.reshape(tlb, [t_height, t_width])).type(dtype)
+    for i in range(t_height):
+        for j in range(t_width):
+            if tlb[i][j] <= 0:
+                tlb[i][j] = 10 ** -7
+    weight = Variable(tlb, requires_grad=True)
+    sig = Variable(sig, requires_grad=False)
+    optimizer = torch.optim.SGD([weight], lr=0.001)
+    for i in range(100):
+        optimizer.zero_grad()
+        loss = net(weight, sig)
+        logger.info("Loss is %f", loss)
+        loss.backward()
+        optimizer.step()
+        tmap = weight.data
+        # Recalculate sig and weight based on tmap
+        weight = Variable(tmap, requires_grad=True)
+        tmap = tmap.cpu().numpy()
+        tmap = np.reshape(tmap, [h - patch_size, w - patch_size, 1])
+        l_img = (img - airlight) / tmap + airlight
+        l_img = np.reshape(l_img, [3, -1])
+        grad = [np.gradient(l_img[i]) for i in range(3)]
+        grad = np.reshape(grad, [-1, 3])
+        l_img = np.reshape(l_img, [-1, 3])
+        sig = net.sigmoid(torch.from_numpy(grad), len(l_img))
+        sig = sig.view(h - patch_size, w - patch_size)
+        sig = Variable(sig, requires_grad=False)
+
+    tmap = tmap.cpu().numpy()
+    tmap = np.reshape(tmap, [h - patch_size, w - patch_size, 1])
+    l_img = (img - airlight) / tmap + airlight
+
+    l_img = np.reshape(l_img, [h - patch_size, w - patch_size, 3])
+    return l_img
