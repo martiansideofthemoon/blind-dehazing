@@ -1,10 +1,6 @@
 """Transmission map estimation functions."""
 import numpy as np
 
-import math
-
-from decimal import Decimal
-
 import sys
 
 import logging
@@ -24,7 +20,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-dtype = torch.cuda.FloatTensor  # Uncomment this to run on GPU
+dtype = torch.FloatTensor
+# dtype = torch.cuda.FloatTensor    # uncomment this line for GPU
 
 
 def gradient(x):
@@ -60,7 +57,8 @@ class Net(nn.Module):
 
     def get_norm(self, x):
         height, width = x.size(0), x.size(1)
-        log = torch.log(x)
+        y = torch.clamp(x, min=0.0000001)
+        log = torch.log(y)
         log = log.view(1, 1, height, width)
         conv1, conv2 = gradient(log)
         l2_norm = torch.mul(conv1, conv1) + torch.mul(conv2, conv2)
@@ -99,18 +97,19 @@ def estimate_tmap(img, patches, airlight, constants):
 
     # Define the Network
     net = Net(img, patches, airlight, torch.from_numpy(tlb).type(dtype), constants)
-    net.cuda()
+    # net.cuda()    # uncomment this line for GPU
 
     # Actual Optimization
     optimizer = torch.optim.SGD([net.tmap], lr=0.001)
-    for i in range(5):
+    for i in range(100):
         optimizer.zero_grad()
         loss = net(torch.from_numpy(l_img).type(dtype))
         logger.info("Loss is %f", loss)
         loss.backward()
         optimizer.step()
         tmap = net.tmap.data
-        tmap = tmap.cpu().numpy()
+        # tmap = tmap.cpu().numpy()    # uncomment this line for GPU and comment next line
+        tmap = tmap.numpy()
         tmap = np.reshape(tmap, [h - patch_size, w - patch_size, 1])
         l_img = (img - airlight) / tmap + airlight
 
