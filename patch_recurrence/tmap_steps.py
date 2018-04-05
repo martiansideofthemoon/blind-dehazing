@@ -44,7 +44,9 @@ def w_val(l_img):
     l_img = Variable(l_img.view(1, 1, height, width), requires_grad=False)
     conv1, conv2 = gradient(l_img)
     raised = (0.1 - torch.sqrt(torch.mul(conv1, conv1) + torch.mul(conv2, conv2))) * 48
-    return torch.sigmoid(raised)
+    result = torch.sigmoid(raised)
+    result.view(height * width)
+    return result
 
 
 class Net(nn.Module):
