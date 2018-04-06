@@ -57,8 +57,7 @@ class Net(nn.Module):
 
     def get_norm(self, x):
         height, width = x.size(0), x.size(1)
-        y = torch.clamp(x, min=0.0000001)
-        log = torch.log(y)
+        log = torch.log(torch.clamp(x, min=0.0000001))
         log = log.view(1, 1, height, width)
         conv1, conv2 = gradient(log)
         l2_norm = torch.mul(conv1, conv1) + torch.mul(conv2, conv2)
@@ -87,10 +86,6 @@ def estimate_tmap(img, patches, airlight, constants):
         tlb_patch = 1 - raw / airlight
         tlb[index] = max(tlb_patch[patch_size ** 2 // 2])
     tlb = np.reshape(tlb, [h - patch_size, w - patch_size, 1])
-    for i in range(h - patch_size):
-        for j in range(w - patch_size):
-            if tlb[i][j][0] <= 0:
-                tlb[i][j][0] = 10 ** -7
 
     img = np.reshape(img[0:h - patch_size, 0:w - patch_size], [h - patch_size, w - patch_size, 3])
     l_img = (img - airlight) / tlb + airlight
