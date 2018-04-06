@@ -57,7 +57,7 @@ class Net(nn.Module):
 
     def get_norm(self, x):
         height, width = x.size(0), x.size(1)
-        log = torch.log(torch.clamp(x, min=0.0000001))
+        log = torch.log(torch.clamp(x, min=0.0000001, max=1))
         log = log.view(1, 1, height, width)
         conv1, conv2 = gradient(log)
         l2_norm = torch.mul(conv1, conv1) + torch.mul(conv2, conv2)
