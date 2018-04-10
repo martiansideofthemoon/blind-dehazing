@@ -19,6 +19,8 @@ import tools
 
 import yaml
 
+import numpy as np
+
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -105,18 +107,20 @@ def main():
 
     # T-map estimation code begins
 
-    del pairs
     del patches
     gc.collect()
 
     logger.info("Extracting ALL patches ...")
-    patches = steps.generate_patches([img], constants, True)
+    patches = steps.generate_patches(scaled_imgs, constants, True)
 
     logger.info("Estimating t-map ...")
-    dehazed = tmap_steps.estimate_tmap(img, patches[0], airlight, constants)
+    dehazed = tmap_steps.estimate_tmap(img, patches, pairs, airlight, constants)
 
     logger.info("Displaying dehazed output image ...")
-    tools.show_img([img, dehazed])
+    h, w = len(img), len(img[0])
+    img = img[0:h - 7, 0:w - 7, :]
+    tools.save_img([img, dehazed])
 
 if __name__ == '__main__':
     main()
+

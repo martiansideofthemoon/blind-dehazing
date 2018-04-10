@@ -147,6 +147,57 @@ def generate_pairs(patches, constants):
     return pairs
 
 
+def generate_pairs_raw(patches, constants):
+    k_nearest = constants.K_NEAREST
+    num_patches = constants.NUM_QUERY_PATCHES
+    scaled_imgs = len(patches)
+
+    pairs = []
+    query_database = []
+    candidate_database = []
+    index_database = []
+    length_database = []
+    for k in range(scaled_imgs):
+        qp = [np.reshape(patch.raw_patch, [-1]) for patch in patches[k] if 7 <= patch.bucket <= 9]
+        qi = [index for index, patch in enumerate(patches[k]) if 7 <= patch.bucket <= 9]
+
+        # Choose lesser query patches through random selection to improve speed
+        if len(qi) > num_patches:
+            np.random.seed(0)
+            selection = np.random.choice(np.arange(len(qi)), num_patches, replace=False).tolist()
+            selection.sort()
+            query_patches = [qp[i] for i in selection]
+            query_indices = [qi[i] for i in selection]
+        else:
+            query_patches = qp
+            query_indices = qi
+
+        query_database.append(
+            np.vstack([query_patches])
+        )
+        index_database.append(query_indices)
+        length_database.append(len(query_indices))
+        candidate_database.append(
+            np.vstack([[np.reshape(patch.raw_patch, [-1]) for i, patch in enumerate(patches[k]) if 0 <= patch.bucket <= 5]])
+        )
+
+    p1 = np.concatenate(candidate_database)
+    kdt = KDTree(p1, leaf_size=30, metric='euclidean')
+
+    # Find list of nearest neighbours for each patch
+    # `total` is used to correct indices of queried patches for every iteration
+    total = 0
+    for k in range(scaled_imgs):
+        nn = kdt.query(query_database[k], k=k_nearest, return_distance=False, sort_results=False)
+        q = [total + index_database[k][i] for i in range(length_database[k])]
+        for i in range(len(nn)):
+            for j in range(k_nearest):
+                pairs.append([q[i], nn[i][j]])
+        total += len(patches[k])
+
+    return pairs
+
+
 def filter_pairs(patches, pairs, constants):
     pair_threshold = constants.PAIR_THRESHOLD
     # Convert the list of patch norms into numpy arrays
@@ -174,6 +225,25 @@ def filter_pairs(patches, pairs, constants):
     return np.array(filtered_pairs)
 
 
+def filter_pairs_all(patches, pairs):
+    # Convert the list of patch norms into numpy arrays
+    patch_database = []
+    patches2 = []
+    for k in range(len(patches)):
+        patch_database.append(
+            np.vstack([patch.norm_patch for patch in patches[k]])
+        )
+        patches2.extend(patches[k])
+    patch_database = np.concatenate(patch_database)
+
+    filtered_pairs = []
+    for i, j in pairs:
+        filtered_pairs.append(
+            Pair(patches2[i], patches2[j])
+        )
+    return np.array(filtered_pairs)
+
+
 def remove_outliers(pairs, constants):
     outlier_threshold = constants.OUTLIER_THRESHOLD
     new_pairs = []
@@ -191,3 +261,4 @@ def estimate_airlight(pairs):
         numerator += pair.weight * pair.airlight
         denominator += pair.weight
     return (numerator / denominator)
+
