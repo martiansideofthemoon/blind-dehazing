@@ -131,13 +131,9 @@ def estimate_tmap(img, patches, pairs, airlight, constants):
     steps.set_patch_buckets(patches, constants)
 
     logger.info("Generating raw pairs of patches ...")
-    raw_pairs = steps.generate_pairs_raw(patches, constants)
+    raw_pairs = steps.generate_pairs(patches, constants, raw=True)
+    raw_pairs = steps.filter_pairs(patches, raw_pairs, constants, all_pairs=True)
     print("\nNumber of pairs generated using generate_pairs")
-    print(len(raw_pairs))
-
-    logger.info("Filtering pairs for checking normalized correlation ...")
-    raw_pairs = steps.filter_pairs_all(patches, raw_pairs)
-    print("\nNumber of pairs retained after filtering")
     print(len(raw_pairs))
     # Use `patches` and find all low-SSD pairs and store as raw_pairs
 
@@ -147,7 +143,7 @@ def estimate_tmap(img, patches, pairs, airlight, constants):
 
     # Actual Optimization
     optimizer = torch.optim.SGD([net.tmap], lr=0.00001)
-    for i in range(100):
+    for i in range(1):
         optimizer.zero_grad()
         loss = net(torch.from_numpy(l_img).type(dtype))
         logger.info("Loss is %f", loss)

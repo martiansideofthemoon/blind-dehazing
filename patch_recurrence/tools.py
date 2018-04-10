@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from matplotlib.font_manager import FontProperties
 import numpy as np
-import collections
 
 
 def show_img(imgs):
@@ -160,6 +159,7 @@ def histogram(pairs, i):
     plt.xlim(u)
     plt.show()
 
+
 def show_patches_per_bucket(patches):
     """Plotting histogram to show number of patches in each bucket
     """
@@ -192,4 +192,3 @@ def show_loss(loss, iterations, name):
     plt.title(name)
     plt.grid(True)
     plt.show()
-

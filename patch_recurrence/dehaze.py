@@ -19,8 +19,6 @@ import tools
 
 import yaml
 
-import numpy as np
-
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -78,7 +76,7 @@ def main():
         steps.set_patch_buckets(patches, constants)
 
         logger.info("Generating pairs of patches ...")
-        pairs = steps.generate_pairs(patches, constants)
+        pairs = steps.generate_pairs(patches, constants, raw=False)
 
         print("\nNumber of pairs generated using generate_pairs")
         print(len(pairs))
@@ -89,7 +87,7 @@ def main():
         logger.info("Using saved patches and pairs ...")
 
     logger.info("Filtering pairs for checking normalized correlation ...")
-    pairs = steps.filter_pairs(patches, pairs, constants)
+    pairs = steps.filter_pairs(patches, pairs, constants, all_pairs=False)
 
     print("\nNumber of pairs retained after filtering")
     print(len(pairs))
@@ -123,4 +121,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
