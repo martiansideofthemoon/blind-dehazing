@@ -85,13 +85,17 @@ class Net(nn.Module):
     def get_raw(self, pairs):
         """Equation (25)."""
         t = self.tmap
-        ret = Variable(torch.Tensor(len(self.raw_pairs)).type(dtype), requires_grad=False)
-        for i, pair in enumerate(pairs):
-            first, second = pair.first, pair.second
-            location1, location2 = first.location, second.location
-            x = t[location2[0]][location2[1]] - t[location1[0]][location1[1]]
-            ret[i] = torch.norm(x, 2) ** 2
-        return torch.sum(ret)
+        h, w = len(t), len(t[0])
+        t = t.view(h * w)
+        first = [pair.first.location for pair in pairs]
+        second = [pair.second.location for pair in pairs]
+        f_index = [f[0] * w + f[1] for f in first]
+        s_index = [s[0] * w + s[1] for s in second]
+        f_tval = torch.gather(t, 0, Variable(torch.LongTensor(f_index), requires_grad=False))
+        s_tval = torch.gather(t, 0, Variable(torch.LongTensor(s_index), requires_grad=False))
+        tval = s_tval - f_tval
+        square = torch.mul(tval, tval)
+        return torch.sum(square)
 
     def get_smooth(self, l_img):
         """Equation (26)."""
@@ -143,7 +147,7 @@ def estimate_tmap(img, patches, pairs, airlight, constants):
 
     # Actual Optimization
     optimizer = torch.optim.SGD([net.tmap], lr=0.00001)
-    for i in range(1):
+    for i in range(1000):
         optimizer.zero_grad()
         loss = net(torch.from_numpy(l_img).type(dtype))
         logger.info("Loss is %f", loss)
