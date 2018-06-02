@@ -21,7 +21,7 @@ class Patch(object):
 
     def store(self, img, location):
         # If the patch passes std_dev test, the following vector used in KNN
-        self.norm_patch = 0 if self.std_dev == 0 else self.mean_free_patch / self.std_dev
+        self.norm_patch = 0 if np.allclose(self.std_dev, 0) else self.mean_free_patch / self.std_dev
         # We want l2 norm of each vector to be 1
         self.norm_patch = self.norm_patch / np.sqrt(self.patch_size * self.patch_size * 3)
         # Used to refer to original location in future if needed

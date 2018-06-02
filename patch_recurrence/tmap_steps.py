@@ -59,7 +59,7 @@ class Net(nn.Module):
         conv2 = F.conv2d(x, diff2, padding=(1, 0))
         return conv1, conv2
 
-    def get_norm(self, x):
+    def spatial_gradient(self, x):
         """Return l2-norm squared for grad(log(t))."""
         height, width = x.size(0), x.size(1)
         log = torch.log(torch.clamp(x, min=0.0000001, max=1))
@@ -100,7 +100,7 @@ class Net(nn.Module):
     def get_smooth(self, l_img):
         """Equation (26)."""
         tmap = self.tmap
-        l2_norm = self.get_norm(tmap)
+        l2_norm = self.spatial_gradient(tmap)
         sig = self.w_val(l_img)
         s = l2_norm * sig
         return torch.sum(s)
@@ -130,16 +130,19 @@ def estimate_tmap(img, patches, pairs, airlight, constants):
 
     img = np.reshape(img[0:h - patch_size, 0:w - patch_size], [h - patch_size, w - patch_size, 3])
     l_img = (img - airlight) / tlb + airlight
-
-    logger.info("Putting patches in buckets ...")
-    steps.set_patch_buckets(patches, constants)
+    # return l_img
 
     logger.info("Generating raw pairs of patches ...")
-    raw_pairs = steps.generate_pairs(patches, constants, raw=True)
-    raw_pairs = steps.filter_pairs(patches, raw_pairs, constants, all_pairs=True)
+    raw_pairs = steps.generate_pairs_raw(patches, constants)
     print("\nNumber of pairs generated using generate_pairs")
     print(len(raw_pairs))
-    # Use `patches` and find all low-SSD pairs and store as raw_pairs
+    logger.info("Removing duplicates ...")
+    raw_pairs = steps.remove_duplicates(raw_pairs)
+    print("\nNumber of pairs after duplicate removal")
+    print(len(raw_pairs))
+    logger.info("Forming pair ...")
+    raw_pairs = steps.filter_pairs(patches, raw_pairs, constants, all_pairs=True)
+    # Use `patches` and find all low-SSD pairs and store as raw_pairs instead of above steps
 
     # Define the Network
     net = Net(img, pairs, raw_pairs, airlight, torch.from_numpy(tlb).type(dtype))

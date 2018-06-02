@@ -76,7 +76,7 @@ def main():
         steps.set_patch_buckets(patches, constants)
 
         logger.info("Generating pairs of patches ...")
-        pairs = steps.generate_pairs(patches, constants, raw=False)
+        pairs = steps.generate_pairs(patches, constants)
 
         print("\nNumber of pairs generated using generate_pairs")
         print(len(pairs))
@@ -109,7 +109,7 @@ def main():
     gc.collect()
 
     logger.info("Extracting ALL patches ...")
-    patches = steps.generate_patches(scaled_imgs, constants, True)
+    patches = steps.generate_patches([img], constants, True)
 
     logger.info("Estimating t-map ...")
     dehazed = tmap_steps.estimate_tmap(img, patches, pairs, airlight, constants)
