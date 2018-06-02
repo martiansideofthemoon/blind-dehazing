@@ -43,13 +43,13 @@ class Net(nn.Module):
         l_img = torch.mean(l_img, 2)
         height, width = l_img.size(0), l_img.size(1)
         l_img = Variable(l_img.view(1, 1, height, width), requires_grad=False)
-        conv1, conv2 = self.gradient(l_img)
+        conv1, conv2 = self.spatial_gradient(l_img)
         raised = (0.1 - torch.sqrt(torch.mul(conv1, conv1) + torch.mul(conv2, conv2))) * 48
         result = torch.sigmoid(raised)
         result.view(height * width)
         return result
 
-    def gradient(self, x):
+    def spatial_gradient(self, x):
         """Return x and y components of grad(x)."""
         diff1 = torch.Tensor([-1, 0, 1]).type(dtype)
         diff1 = Variable(diff1.view(1, 1, 1, 3), requires_grad=False)
@@ -59,12 +59,12 @@ class Net(nn.Module):
         conv2 = F.conv2d(x, diff2, padding=(1, 0))
         return conv1, conv2
 
-    def spatial_gradient(self, x):
+    def gradient(self, x):
         """Return l2-norm squared for grad(log(t))."""
         height, width = x.size(0), x.size(1)
         log = torch.log(torch.clamp(x, min=0.0000001, max=1))
         log = log.view(1, 1, height, width)
-        conv1, conv2 = self.gradient(log)
+        conv1, conv2 = self.spatial_gradient(log)
         l2_norm = torch.mul(conv1, conv1) + torch.mul(conv2, conv2)
         l2_norm.view(height * width)
         return l2_norm
@@ -100,7 +100,7 @@ class Net(nn.Module):
     def get_smooth(self, l_img):
         """Equation (26)."""
         tmap = self.tmap
-        l2_norm = self.spatial_gradient(tmap)
+        l2_norm = self.gradient(tmap)
         sig = self.w_val(l_img)
         s = l2_norm * sig
         return torch.sum(s)
