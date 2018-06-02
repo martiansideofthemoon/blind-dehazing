@@ -20,8 +20,8 @@ def show_img(imgs):
 
 def save_img(imgs):
     """ Save 2 images side-by-side."""
-    img1 = cv2.cvtColor(np.array(np.abs(imgs[0]) * 255, dtype=np.uint8), cv2.COLOR_BGR2RGB)
-    img2 = cv2.cvtColor(np.array(np.abs(imgs[1]) * 255, dtype=np.uint8), cv2.COLOR_BGR2RGB)
+    img1 = np.array(np.abs(imgs[0]) * 255, dtype=np.uint8)
+    img2 = np.array(np.abs(imgs[1]) * 255, dtype=np.uint8)
     vis = np.concatenate((img1, img2), axis=1)
     cv2.imwrite('final.png', vis)
 

@@ -130,7 +130,9 @@ def estimate_tmap(img, patches, pairs, airlight, constants):
 
     img = np.reshape(img[0:h - patch_size, 0:w - patch_size], [h - patch_size, w - patch_size, 3])
     l_img = (img - airlight) / tlb + airlight
-    # return l_img
+    return l_img
+
+    # TODO - Everything after this
 
     logger.info("Generating raw pairs of patches ...")
     raw_pairs = steps.generate_pairs_raw(patches, constants)
